@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 import uuid
+import re
 
 # ─────────────────────────────────────────
 # CONFIG
@@ -12,6 +13,16 @@ st.set_page_config(
     page_icon="🤖",
     layout="wide"
 )
+
+# Custom CSS (better UI)
+st.markdown("""
+<style>
+.chat-container {
+    font-size:16px;
+    line-height:1.6;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # ─────────────────────────────────────────
 # API HELPERS
@@ -51,7 +62,6 @@ def api_rename_thread(thread_id: str, title: str):
         pass
 
 def api_chat_stream(thread_id: str, message: str):
-    """SSE stream se AI response yield karo"""
     try:
         with requests.post(
             f"{API_BASE}/chat",
@@ -69,6 +79,15 @@ def api_chat_stream(thread_id: str, message: str):
                         yield chunk
     except Exception as e:
         yield f"\n\n❌ Error: {str(e)}"
+
+# ─────────────────────────────────────────
+# FORMAT RESPONSE
+# ─────────────────────────────────────────
+
+def format_response(text):
+    if "```" in text:
+        return text  # Streamlit auto formats code blocks
+    return f"<div class='chat-container'>{text}</div>"
 
 # ─────────────────────────────────────────
 # SESSION STATE INIT
@@ -139,7 +158,6 @@ for thread in threads:
             st.session_state["threads"] = api_get_threads()
             st.rerun()
 
-    # Rename input
     if st.session_state["rename_mode"] == tid:
         new_title = st.sidebar.text_input("New name:", value=title, key=f"title_input_{tid}")
         if st.sidebar.button("✅ Save", key=f"save_rename_{tid}"):
@@ -154,32 +172,41 @@ for thread in threads:
 
 st.title("🤖 AI Assistant")
 
-# Chat history display
+# Display chat history
 for msg in st.session_state["message_history"]:
     with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
+        st.markdown(format_response(msg["content"]), unsafe_allow_html=True)
 
 # Chat input
 user_input = st.chat_input("Ask me anything...")
 
 if user_input:
-    # User message dikhao
     st.session_state["message_history"].append({"role": "user", "content": user_input})
+
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    # AI response stream karo
     with st.chat_message("assistant"):
         response_placeholder = st.empty()
         full_response = ""
 
+        # typing indicator
+        response_placeholder.markdown("⏳ *AI is thinking...*")
+
         for chunk in api_chat_stream(st.session_state["thread_id"], user_input):
             full_response += chunk
-            response_placeholder.markdown(full_response + "▌")
+            formatted = format_response(full_response)
 
-        response_placeholder.markdown(full_response)
+            response_placeholder.markdown(formatted + "▌", unsafe_allow_html=True)
 
-    st.session_state["message_history"].append({"role": "assistant", "content": full_response})
+        if not full_response.strip():
+            full_response = "⚠️ No response from AI"
 
-    # Threads refresh karo (title update ke liye)
+        response_placeholder.markdown(format_response(full_response), unsafe_allow_html=True)
+
+    st.session_state["message_history"].append({
+        "role": "assistant",
+        "content": full_response
+    })
+
     st.session_state["threads"] = api_get_threads()

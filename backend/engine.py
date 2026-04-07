@@ -3,7 +3,6 @@ from langgraph.graph.message import add_messages
 from typing import TypedDict, Annotated
 from langchain_core.messages import BaseMessage, ToolMessage, SystemMessage
 from langchain_mistralai import ChatMistralAI
-from dotenv import load_dotenv
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langchain_community.tools import DuckDuckGoSearchResults
 from langchain_community.tools import WikipediaQueryRun
@@ -12,11 +11,25 @@ from langchain_core.tools import tool
 from datetime import datetime
 import sqlite3
 import os
+import logging
 
-# Load API KEY
-load_dotenv()
+from config import load_env
+load_env()
 
-# Tools
+# Configure logging
+logging.basicConfig(level=logging.WARNING)
+logger = logging.getLogger(__name__)
+
+# LangSmith tracing — .env se automatically pick ho jaata hai:
+# LANGCHAIN_TRACING_V2=true
+# LANGCHAIN_API_KEY=...
+# LANGCHAIN_PROJECT=...
+# Koi extra code nahi chahiye, bas load_dotenv() kaafi hai.
+
+# ─────────────────────────────────────────
+# TOOLS
+# ─────────────────────────────────────────
+
 search_tool = DuckDuckGoSearchResults(num_results=8)
 wiki_tool = WikipediaQueryRun(api_wrapper=WikipediaAPIWrapper())
 
@@ -32,15 +45,24 @@ def calculator(expression: str) -> str:
 tools = [search_tool, wiki_tool, calculator]
 tools_dict = {t.name: t for t in tools}
 
-# State
+# ─────────────────────────────────────────
+# STATE
+# ─────────────────────────────────────────
+
 class ChatState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
 
+# ─────────────────────────────────────────
 # LLM
+# ─────────────────────────────────────────
+
 llm = ChatMistralAI(model_name="mistral-large-2512")
 llm_with_tools = llm.bind_tools(tools)
 
-# System Prompt
+# ─────────────────────────────────────────
+# SYSTEM PROMPT
+# ─────────────────────────────────────────
+
 system_prompt = SystemMessage(content=f"""You are a highly intelligent AI assistant — like ChatGPT or Claude. Today's date is {datetime.now().strftime("%d %B %Y, %A")}.
 
 ## Your Personality:
@@ -56,11 +78,16 @@ system_prompt = SystemMessage(content=f"""You are a highly intelligent AI assist
 
 ## Output Rules:
 - Respond in the SAME language the user writes in (Hindi → Hindi, English → English, Hinglish → Hinglish).
+- Use proper Markdown formatting in ALL responses:
+  - Use ## and ### for headings
+  - Use **bold** for important terms
+  - Use bullet points (- ) and numbered lists (1.) where appropriate
+  - Use `code blocks` for code
+  - Use --- for section dividers
 - For NEWS: Search first, then format as: 📰 **Headline** — One line summary. *(X hours ago)*
-- For EXPLANATIONS: Use clear headings, bullet points, examples.
-- For CODE: Always use proper code blocks with language name.
+- For RECIPES or step-by-step guides: Use clear numbered steps and ingredient lists with proper Markdown.
 - For MATH: Show the expression and final answer clearly.
-- Keep responses concise but complete.
+- Keep responses complete but well-structured — no walls of unformatted text.
 
 ## Thinking Rules:
 - For complex questions, think step by step.
@@ -68,7 +95,10 @@ system_prompt = SystemMessage(content=f"""You are a highly intelligent AI assist
 - After getting tool results, synthesize and present them cleanly.
 """)
 
-# Nodes
+# ─────────────────────────────────────────
+# NODES
+# ─────────────────────────────────────────
+
 def chat_node(state: ChatState):
     messages = [system_prompt] + state['messages']
     response = llm_with_tools.invoke(messages)
@@ -91,10 +121,53 @@ def should_use_tool(state: ChatState):
         return 'tool_node'
     return END
 
-# DB path
+# ─────────────────────────────────────────
+# GRAPH + CHECKPOINTER
+# ─────────────────────────────────────────
+
 DB_PATH = os.path.join(os.path.dirname(__file__), 'chatbot.db')
 
-# Build graph
+# Global references for cleanup
+_conn = None
+_checkpointer = None
+chatbot = None
+
+
+def init_chatbot():
+    """Initialize the chatbot graph and checkpointer lazily."""
+    global _conn, _checkpointer, chatbot
+
+    if chatbot is not None:
+        return chatbot
+
+    _conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    _checkpointer = SqliteSaver(_conn)
+    chatbot = _build_graph(_checkpointer)
+    logger.info("Chatbot initialized")
+    return chatbot
+
+
+def cleanup_chatbot():
+    """
+    Cleanup function called during app shutdown.
+    Closes DB connections and clears graph references.
+    """
+    global _conn, _checkpointer, chatbot
+
+    logger.info("Cleaning up chatbot resources...")
+
+    if _conn:
+        try:
+            _conn.close()
+            logger.info("Database connection closed")
+        except Exception as e:
+            logger.error(f"Error closing DB connection: {e}")
+
+    _conn = None
+    _checkpointer = None
+    chatbot = None
+
+
 def _build_graph(checkpointer):
     graph = StateGraph(ChatState)
     graph.add_node('chat_node', chat_node)
@@ -104,28 +177,50 @@ def _build_graph(checkpointer):
     graph.add_edge('tool_node', 'chat_node')
     return graph.compile(checkpointer=checkpointer)
 
-# Global connection (kept open for app lifetime)
-_conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-_checkpointer = SqliteSaver(_conn)
-chatbot = _build_graph(_checkpointer)
+
+# ─────────────────────────────────────────
+# PUBLIC FUNCTIONS
+# ─────────────────────────────────────────
 
 def stream_response(thread_id: str, user_message: str):
-    """Generator: yields text chunks for SSE streaming"""
+    """Generator: yields text chunks for SSE streaming. LangSmith traces automatically."""
     from langchain_core.messages import AIMessage, HumanMessage
-    config = {'configurable': {'thread_id': thread_id}}
-    for message_chunk, metadata in chatbot.stream(
-        {'messages': [HumanMessage(content=user_message)]},
-        config=config,
-        stream_mode='messages'
-    ):
-        if isinstance(message_chunk, AIMessage) and isinstance(message_chunk.content, str) and message_chunk.content:
-            yield message_chunk.content
+
+    bot = init_chatbot()
+
+    config = {
+        'configurable': {'thread_id': thread_id},
+        'run_name': f'chat_{thread_id[:8]}',
+        'metadata': {'thread_id': thread_id},
+    }
+
+    try:
+        for message_chunk, metadata in bot.stream(
+            {'messages': [HumanMessage(content=user_message)]},
+            config=config,
+            stream_mode='messages'
+        ):
+            if isinstance(message_chunk, AIMessage) and isinstance(message_chunk.content, str) and message_chunk.content:
+                yield message_chunk.content
+
+    except GeneratorExit:
+        logger.debug(f"Stream generator closed for thread {thread_id[:8]}")
+    except Exception as e:
+        if "CancelledError" in type(e).__name__:
+            logger.debug(f"Stream cancelled for thread {thread_id[:8]}")
+        else:
+            logger.error(f"Stream error: {type(e).__name__}: {e}")
+        raise
+
 
 def get_thread_history(thread_id: str):
-    """Returns list of {role, content} from LangGraph checkpointer"""
+    """Returns list of {role, content} from LangGraph checkpointer."""
     from langchain_core.messages import HumanMessage, AIMessage
+
+    bot = init_chatbot()
+
     config = {'configurable': {'thread_id': thread_id}}
-    state = chatbot.get_state(config=config).values
+    state = bot.get_state(config=config).values
     messages = state.get('messages', [])
     result = []
     for msg in messages:

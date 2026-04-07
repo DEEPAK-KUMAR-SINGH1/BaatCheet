@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//d/Downloads/chatbot/frontend-react/**)",
+      "Bash(npm create:*)"
+    ]
+  }
+}

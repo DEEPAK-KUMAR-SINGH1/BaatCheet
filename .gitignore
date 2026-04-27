@@ -1,0 +1,34 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# Local app data
+backend/chatbot.db
+backend/*.db
+backend/*.db-*
+backend/uploads/
+backend/chroma_store/
+
+# Frontend
+frontend-react/node_modules/
+frontend-react/dist/
+frontend-react/.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS and editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

@@ -6,11 +6,13 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
+from config import CORS_ORIGINS
 from models import ChatRequest, NewThreadRequest, ThreadTitleRequest
 from database import (
-    init_db, create_thread, save_message, get_all_threads,
-    get_thread_messages, delete_thread, update_thread_title,
-    update_thread_timestamp
+    init_db, create_thread, save_message,
+    get_threads_for_user, get_thread_messages,
+    delete_thread, update_thread_title, update_thread_timestamp,
+    verify_thread_owner
 )
 from engine import stream_response, cleanup_chatbot
 from auth_routes import router as auth_router, get_current_user
@@ -51,7 +53,7 @@ app = FastAPI(title="AI Chatbot API", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -61,33 +63,50 @@ app.include_router(rag_router)
 app.include_router(admin_router)
 
 
+# ─────────────────────────────────────────
+# THREAD ENDPOINTS — all auth-protected, all scoped to current user
+# ─────────────────────────────────────────
+
 @app.get("/threads")
-def list_threads():
-    return get_all_threads()
+def list_threads(current_user=Depends(get_current_user)):
+    """Return only the threads that belong to the authenticated user."""
+    return get_threads_for_user(current_user["email"])
 
 
 @app.post("/threads")
-def new_thread(req: NewThreadRequest):
-    create_thread(req.thread_id, req.title)
+def new_thread(req: NewThreadRequest, current_user=Depends(get_current_user)):
+    """Create a new thread owned by the authenticated user."""
+    create_thread(req.thread_id, user_id=current_user["email"], title=req.title)
     return {"thread_id": req.thread_id, "title": req.title}
 
 
 @app.patch("/threads/{thread_id}/title")
-def rename_thread(thread_id: str, req: ThreadTitleRequest):
+def rename_thread(thread_id: str, req: ThreadTitleRequest,
+                  current_user=Depends(get_current_user)):
+    """Rename a thread — only the owner can do this."""
+    verify_thread_owner(thread_id, current_user["email"])
     update_thread_title(thread_id, req.title)
     return {"message": "Title updated"}
 
 
 @app.delete("/threads/{thread_id}")
-def remove_thread(thread_id: str):
+def remove_thread(thread_id: str, current_user=Depends(get_current_user)):
+    """Delete a thread and its messages — only the owner can do this."""
+    verify_thread_owner(thread_id, current_user["email"])
     delete_thread(thread_id)
     return {"message": "Thread deleted"}
 
 
 @app.get("/threads/{thread_id}/messages")
-def thread_messages(thread_id: str):
+def thread_messages(thread_id: str, current_user=Depends(get_current_user)):
+    """Return messages for a thread — only visible to the thread owner."""
+    verify_thread_owner(thread_id, current_user["email"])
     return get_thread_messages(thread_id)
 
+
+# ─────────────────────────────────────────
+# CHAT ENDPOINT
+# ─────────────────────────────────────────
 
 @app.post("/chat")
 def chat(req: ChatRequest, current_user=Depends(get_current_user)):
@@ -103,7 +122,9 @@ def chat(req: ChatRequest, current_user=Depends(get_current_user)):
                 detail="Chat limit reached (5/5). Contact admin for unlimited access."
             )
 
-    create_thread(req.thread_id)
+    # Create thread scoped to this user, then save user message
+    create_thread(req.thread_id, user_id=email)
+    verify_thread_owner(req.thread_id, email)
     save_message(req.thread_id, "user", req.message)
     increment_chat_count(email)
 
@@ -135,6 +156,10 @@ def chat(req: ChatRequest, current_user=Depends(get_current_user)):
 
     return StreamingResponse(generate(), media_type="application/x-ndjson")
 
+
+# ─────────────────────────────────────────
+# UTILITY
+# ─────────────────────────────────────────
 
 @app.get("/health")
 def health():

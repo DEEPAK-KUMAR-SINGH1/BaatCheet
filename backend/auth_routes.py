@@ -4,7 +4,7 @@ from pydantic import BaseModel, EmailStr
 from auth import (
     generate_otp, store_otp, verify_otp,
     get_user, create_user, verify_user_email,
-    update_password, check_password,
+    update_password, check_password, password_exceeds_limit,
     create_token, decode_token
 )
 from email_service import send_otp_email
@@ -64,6 +64,8 @@ def get_current_user(creds: HTTPAuthorizationCredentials = Depends(bearer)):
 def signup(req: SignupRequest):
     if len(req.password) < 6:
         raise HTTPException(400, "Password must be at least 6 characters")
+    if password_exceeds_limit(req.password):
+        raise HTTPException(400, "Password is too long. Use 72 bytes or fewer.")
 
     existing = get_user(req.email)
     if existing and existing["is_verified"]:
@@ -90,8 +92,15 @@ def signup_verify(req: OTPVerify):
     if not verify_otp(req.email, req.otp, "verify"):
         raise HTTPException(400, "Invalid or expired OTP")
     verify_user_email(req.email)
+    user = get_user(req.email)
     token = create_token(req.email)
-    return {"message": "Account verified!", "token": token, "email": req.email}
+    return {
+        "message":     "Account verified!",
+        "token":       token,
+        "email":       req.email,
+        "is_admin":    bool(user["is_admin"]) if user else False,
+        "is_approved": bool(user["is_approved"]) if user else False,
+    }
 
 
 # ─────────────────────────────────────────
@@ -107,6 +116,8 @@ def login(req: LoginRequest):
         raise HTTPException(400, "No account found with this email. Please sign up.")
     if not user["is_verified"]:
         raise HTTPException(400, "Email not verified. Please check your inbox.")
+    if password_exceeds_limit(req.password):
+        raise HTTPException(400, "Incorrect password.")
     if not check_password(req.password, user["password_hash"]):
         raise HTTPException(400, "Incorrect password.")
 
@@ -116,7 +127,6 @@ def login(req: LoginRequest):
     return {"message": "OTP sent to your email."}
 
 
-# auth_routes.py — login_verify
 @router.post("/login/verify")
 def login_verify(req: OTPVerify):
     if not verify_otp(req.email, req.otp, "login"):
@@ -129,25 +139,10 @@ def login_verify(req: OTPVerify):
         "message":     "Login successful!",
         "token":       token,
         "email":       user["email"],
-        "is_admin":    bool(user["is_admin"]),      # ← ADD
-        "is_approved": bool(user["is_approved"]),   # ← ADD
-    }
-
-# signup/verify mein bhi same karo:
-@router.post("/signup/verify")
-def signup_verify(req: OTPVerify):
-    if not verify_otp(req.email, req.otp, "verify"):
-        raise HTTPException(400, "Invalid or expired OTP")
-    verify_user_email(req.email)
-    user = get_user(req.email)
-    token = create_token(req.email)
-    return {
-        "message":     "Account verified!",
-        "token":       token,
-        "email":       req.email,
         "is_admin":    bool(user["is_admin"]),
         "is_approved": bool(user["is_approved"]),
     }
+
 
 # ─────────────────────────────────────────
 # FORGOT PASSWORD FLOW
@@ -171,6 +166,8 @@ def forgot_password(req: EmailOnly):
 def forgot_password_verify(req: ResetPasswordRequest):
     if len(req.new_password) < 6:
         raise HTTPException(400, "Password must be at least 6 characters")
+    if password_exceeds_limit(req.new_password):
+        raise HTTPException(400, "Password is too long. Use 72 bytes or fewer.")
     if not verify_otp(req.email, req.otp, "reset"):
         raise HTTPException(400, "Invalid or expired OTP")
     update_password(req.email, req.new_password)

@@ -1,153 +1,184 @@
-import sqlite3
-import os
-import random
-import string
-from datetime import datetime, timedelta
-from passlib.context import CryptContext
-from jose import JWTError, jwt
-from config import JWT_SECRET
+"""
+auth.py - Authentication logic backed by local SQLite.
+"""
 
-DB_PATH    = os.path.join(os.path.dirname(__file__), 'chatbot.db')
+import random
+import secrets
+import string
+from datetime import datetime, timedelta, timezone
+
+import bcrypt
+from jose import JWTError, jwt
+
+from config import ADMIN_BOOTSTRAP_PASSWORD, ADMIN_EMAIL, JWT_SECRET
+from db import execute
+
 SECRET_KEY = JWT_SECRET
-ALGORITHM  = "HS256"
+ALGORITHM = "HS256"
 TOKEN_EXPIRE_DAYS = 7
 OTP_EXPIRE_MINUTES = 10
+MAX_PASSWORD_BYTES = 72
 
-pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-ADMIN_EMAIL = "kashyap040098@gmail.com"
+def _password_to_bytes(password: str) -> bytes:
+    return password.encode("utf-8")
 
-def get_conn():
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    return conn
 
-def init_auth_tables():
-    conn = get_conn()
-    c = conn.cursor()
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id            INTEGER PRIMARY KEY AUTOINCREMENT,
-            email         TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            is_verified   INTEGER DEFAULT 0,
-            is_approved   INTEGER DEFAULT 0,
-            is_admin      INTEGER DEFAULT 0,
-            chat_count    INTEGER DEFAULT 0,
-            created_at    TEXT DEFAULT (datetime('now'))
-        )
-    ''')
-    # Purani DB ke liye — naye columns add karo safely
-    for col, defn in [("is_approved","INTEGER DEFAULT 0"),("is_admin","INTEGER DEFAULT 0"),("chat_count","INTEGER DEFAULT 0")]:
-        try:
-            c.execute(f"ALTER TABLE users ADD COLUMN {col} {defn}")
-        except Exception:
-            pass
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS otps (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT NOT NULL, otp TEXT NOT NULL,
-            purpose TEXT NOT NULL, expires_at TEXT NOT NULL, used INTEGER DEFAULT 0
-        )
-    ''')
-    conn.commit()
-    conn.close()
+def password_exceeds_limit(password: str) -> bool:
+    return len(_password_to_bytes(password)) > MAX_PASSWORD_BYTES
+
+
+def hash_password(password: str) -> str:
+    pw_bytes = _password_to_bytes(password)
+    if len(pw_bytes) > MAX_PASSWORD_BYTES:
+        raise ValueError("Password must be 72 bytes or fewer")
+    return bcrypt.hashpw(pw_bytes, bcrypt.gensalt()).decode("utf-8")
+
+
+def check_password(plain: str, hashed: str) -> bool:
+    plain_bytes = _password_to_bytes(plain)
+    if len(plain_bytes) > MAX_PASSWORD_BYTES:
+        return False
+    try:
+        return bcrypt.checkpw(plain_bytes, hashed.encode("utf-8"))
+    except ValueError:
+        return False
+
 
 def generate_otp() -> str:
-    return ''.join(random.choices(string.digits, k=6))
+    return "".join(random.choices(string.digits, k=6))
 
-def store_otp(email, otp, purpose):
-    conn = get_conn()
-    expires = (datetime.utcnow() + timedelta(minutes=OTP_EXPIRE_MINUTES)).isoformat()
-    conn.execute("UPDATE otps SET used=1 WHERE email=? AND purpose=? AND used=0", (email, purpose))
-    conn.execute("INSERT INTO otps (email, otp, purpose, expires_at) VALUES (?,?,?,?)", (email, otp, purpose, expires))
-    conn.commit()
-    conn.close()
 
-def verify_otp(email, otp, purpose):
-    conn = get_conn()
-    row = conn.execute("SELECT * FROM otps WHERE email=? AND otp=? AND purpose=? AND used=0 ORDER BY id DESC LIMIT 1", (email, otp, purpose)).fetchone()
-    if not row: conn.close(); return False
-    if datetime.utcnow() > datetime.fromisoformat(row["expires_at"]): conn.close(); return False
-    conn.execute("UPDATE otps SET used=1 WHERE id=?", (row["id"],))
-    conn.commit(); conn.close(); return True
+def store_otp(email: str, otp: str, purpose: str):
+    execute(
+        "UPDATE otps SET used=1 WHERE email=%s AND purpose=%s AND used=0",
+        (email, purpose),
+    )
+    expires = datetime.now(timezone.utc) + timedelta(minutes=OTP_EXPIRE_MINUTES)
+    execute(
+        "INSERT INTO otps (email, otp, purpose, expires_at) VALUES (%s, %s, %s, %s)",
+        (email, otp, purpose, expires),
+    )
 
-def get_user(email):
-    conn = get_conn()
-    row = conn.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
-    conn.close()
-    return dict(row) if row else None
 
-def create_user(email, password):
-    conn = get_conn()
-    hashed = pwd_ctx.hash(password)
+def _parse_datetime(value):
+    if isinstance(value, datetime):
+        return value
+    return datetime.fromisoformat(str(value))
+
+
+def verify_otp(email: str, otp: str, purpose: str) -> bool:
+    row = execute(
+        """
+        SELECT id, expires_at FROM otps
+        WHERE email=%s AND otp=%s AND purpose=%s AND used=0
+        ORDER BY id DESC LIMIT 1
+        """,
+        (email, otp, purpose),
+        fetch="one",
+    )
+    if not row:
+        return False
+
+    expires_at = _parse_datetime(row["expires_at"])
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if datetime.now(timezone.utc) > expires_at:
+        return False
+
+    execute("UPDATE otps SET used=1 WHERE id=%s", (row["id"],))
+    return True
+
+
+def get_user(email: str):
+    return execute("SELECT * FROM users WHERE email=%s", (email,), fetch="one")
+
+
+def create_user(email: str, password: str) -> bool:
+    hashed = hash_password(password)
     try:
-        conn.execute("INSERT INTO users (email, password_hash) VALUES (?,?)", (email, hashed))
-        conn.commit(); return True
-    except sqlite3.IntegrityError: return False
-    finally: conn.close()
+        execute(
+            "INSERT INTO users (email, password_hash) VALUES (%s, %s)",
+            (email, hashed),
+        )
+        return True
+    except Exception:
+        return False
 
-def verify_user_email(email):
-    conn = get_conn()
-    conn.execute("UPDATE users SET is_verified=1 WHERE email=?", (email,))
-    conn.commit(); conn.close()
 
-def update_password(email, new_password):
-    conn = get_conn()
-    hashed = pwd_ctx.hash(new_password)
-    conn.execute("UPDATE users SET password_hash=? WHERE email=?", (hashed, email))
-    conn.commit(); conn.close()
+def verify_user_email(email: str):
+    execute("UPDATE users SET is_verified=1 WHERE email=%s", (email,))
 
-def check_password(plain, hashed):
-    return pwd_ctx.verify(plain, hashed)
 
-def approve_user(email):
-    conn = get_conn()
-    conn.execute("UPDATE users SET is_approved=1 WHERE email=?", (email,))
-    conn.commit(); conn.close()
+def update_password(email: str, new_password: str):
+    hashed = hash_password(new_password)
+    execute("UPDATE users SET password_hash=%s WHERE email=%s", (hashed, email))
 
-def revoke_user(email):
-    conn = get_conn()
-    conn.execute("UPDATE users SET is_approved=0 WHERE email=?", (email,))
-    conn.commit(); conn.close()
+
+def approve_user(email: str):
+    execute("UPDATE users SET is_approved=1 WHERE email=%s", (email,))
+
+
+def revoke_user(email: str):
+    execute("UPDATE users SET is_approved=0 WHERE email=%s", (email,))
+
 
 def get_all_users():
-    conn = get_conn()
-    rows = conn.execute("SELECT id, email, is_verified, is_approved, is_admin, chat_count, created_at FROM users ORDER BY created_at DESC").fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
+    return execute(
+        "SELECT id, email, is_verified, is_approved, is_admin, chat_count, created_at "
+        "FROM users ORDER BY created_at DESC",
+        fetch="all",
+    )
 
-def increment_chat_count(email):
-    conn = get_conn()
-    conn.execute("UPDATE users SET chat_count = chat_count + 1 WHERE email=?", (email,))
-    conn.commit(); conn.close()
 
-def get_chat_count(email):
-    conn = get_conn()
-    row = conn.execute("SELECT chat_count FROM users WHERE email=?", (email,)).fetchone()
-    conn.close()
+def increment_chat_count(email: str):
+    execute("UPDATE users SET chat_count = chat_count + 1 WHERE email=%s", (email,))
+
+
+def get_chat_count(email: str) -> int:
+    row = execute("SELECT chat_count FROM users WHERE email=%s", (email,), fetch="one")
     return row["chat_count"] if row else 0
 
-def ensure_admin_exists():
-    conn = get_conn()
-    row = conn.execute("SELECT * FROM users WHERE email=?", (ADMIN_EMAIL,)).fetchone()
-    if not row:
-        hashed = pwd_ctx.hash("Admin@1234")
-        conn.execute("INSERT INTO users (email, password_hash, is_verified, is_approved, is_admin) VALUES (?,?,1,1,1)", (ADMIN_EMAIL, hashed))
-    else:
-        conn.execute("UPDATE users SET is_admin=1, is_approved=1, is_verified=1 WHERE email=?", (ADMIN_EMAIL,))
-    conn.commit(); conn.close()
 
-def create_token(email):
-    expire = datetime.utcnow() + timedelta(days=TOKEN_EXPIRE_DAYS)
+def ensure_admin_exists():
+    if not ADMIN_EMAIL:
+        print("ADMIN_EMAIL is not set; skipping admin bootstrap.")
+        return
+
+    row = get_user(ADMIN_EMAIL)
+    if not row:
+        if not ADMIN_BOOTSTRAP_PASSWORD:
+            print("ADMIN_BOOTSTRAP_PASSWORD is not set; skipping admin bootstrap.")
+            return
+        hashed = hash_password(ADMIN_BOOTSTRAP_PASSWORD)
+        execute(
+            """
+            INSERT INTO users (email, password_hash, is_verified, is_approved, is_admin)
+            VALUES (%s, %s, 1, 1, 1)
+            """,
+            (ADMIN_EMAIL, hashed),
+        )
+    else:
+        execute(
+            "UPDATE users SET is_admin=1, is_approved=1, is_verified=1 WHERE email=%s",
+            (ADMIN_EMAIL,),
+        )
+        if ADMIN_BOOTSTRAP_PASSWORD and check_password(ADMIN_BOOTSTRAP_PASSWORD, row["password_hash"]):
+            execute(
+                "UPDATE users SET password_hash=%s WHERE email=%s",
+                (hash_password(secrets.token_urlsafe(48)), ADMIN_EMAIL),
+            )
+            print("Admin bootstrap password was retired; use forgot password to set a new one.")
+
+
+def create_token(email: str) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(days=TOKEN_EXPIRE_DAYS)
     return jwt.encode({"sub": email, "exp": expire}, SECRET_KEY, algorithm=ALGORITHM)
 
-def decode_token(token):
+
+def decode_token(token: str):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return payload.get("sub")
     except JWTError:
         return None
-
-init_auth_tables()
-ensure_admin_exists()

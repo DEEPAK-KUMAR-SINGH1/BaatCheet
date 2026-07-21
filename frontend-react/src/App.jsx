@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './hooks/useAuth.jsx'
 import AuthPage  from './pages/AuthPage'
 import ChatPage  from './pages/ChatPage'
 import AdminPage from './pages/AdminPage'
+import SharePage from './pages/SharePage'
 
 function LoadingScreen() {
   return (
@@ -40,6 +41,7 @@ export default function App() {
   return (
     <AuthProvider>
       <Routes>
+        <Route path="/share/:token" element={<SharePage />} />
         <Route path="/auth" element={<PublicRoute><AuthPage /></PublicRoute>} />
         <Route path="/"     element={<PrivateRoute><ChatPage /></PrivateRoute>} />
         <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />

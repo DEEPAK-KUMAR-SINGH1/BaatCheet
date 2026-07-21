@@ -88,12 +88,28 @@ def init_all_tables():
             """)
 
             cur.execute("""
+                CREATE TABLE IF NOT EXISTS workspaces (
+                    workspace_id TEXT PRIMARY KEY,
+                    user_id      TEXT NOT NULL,
+                    name         TEXT NOT NULL,
+                    description  TEXT NOT NULL DEFAULT '',
+                    created_at   TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at   TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_workspaces_user
+                ON workspaces(user_id, updated_at)
+            """)
+
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS threads (
-                    thread_id  TEXT PRIMARY KEY,
-                    user_id    TEXT NOT NULL DEFAULT '',
-                    title      TEXT NOT NULL DEFAULT 'New Chat',
-                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    thread_id    TEXT PRIMARY KEY,
+                    user_id      TEXT NOT NULL DEFAULT '',
+                    title        TEXT NOT NULL DEFAULT 'New Chat',
+                    workspace_id TEXT,
+                    created_at   TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at   TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
             """)
             cur.execute("""
@@ -107,19 +123,59 @@ def init_all_tables():
                     thread_id  TEXT NOT NULL REFERENCES threads(thread_id) ON DELETE CASCADE,
                     role       TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
                     content    TEXT NOT NULL,
+                    metadata   TEXT NOT NULL DEFAULT '{}',
+                    status     TEXT NOT NULL DEFAULT 'complete',
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
             """)
 
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS documents (
-                    doc_id      TEXT PRIMARY KEY,
-                    thread_id   TEXT NOT NULL REFERENCES threads(thread_id) ON DELETE CASCADE,
-                    filename    TEXT NOT NULL,
-                    file_type   TEXT NOT NULL,
-                    chunk_count INTEGER NOT NULL DEFAULT 0,
-                    uploaded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    doc_id            TEXT PRIMARY KEY,
+                    thread_id         TEXT NOT NULL,
+                    workspace_id      TEXT,
+                    filename          TEXT NOT NULL,
+                    file_type         TEXT NOT NULL,
+                    chunk_count       INTEGER NOT NULL DEFAULT 0,
+                    status            TEXT NOT NULL DEFAULT 'indexed',
+                    error             TEXT,
+                    extracted_preview TEXT,
+                    uploaded_at       TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at        TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS document_chunks (
+                    doc_id      TEXT NOT NULL REFERENCES documents(doc_id) ON DELETE CASCADE,
+                    chunk_index INTEGER NOT NULL,
+                    page        INTEGER,
+                    content     TEXT NOT NULL,
+                    created_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (doc_id, chunk_index)
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS thread_shares (
+                    thread_id  TEXT PRIMARY KEY REFERENCES threads(thread_id) ON DELETE CASCADE,
+                    user_id    TEXT NOT NULL,
+                    token      TEXT UNIQUE NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    revoked_at TEXT
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS analytics_events (
+                    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id    TEXT,
+                    event_type TEXT NOT NULL,
+                    reason     TEXT,
+                    metadata   TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_analytics_events_type_time
+                ON analytics_events(event_type, created_at)
             """)
             run_migrations(conn)
     finally:

@@ -18,6 +18,10 @@ backend/*.db
 backend/*.db-*
 backend/uploads/
 backend/chroma_store/
+backend/MCP/*/credentials.json
+backend/MCP/*/oauth_states/
+backend/MCP/*/tokens/
+backend/MCP/telegram/token.txt
 
 # Frontend
 frontend-react/node_modules/

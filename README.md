@@ -47,6 +47,36 @@ Open `http://localhost:5173`. The Vite dev server proxies API requests to `http:
 
 The default SQLite database is `backend/chatbot.db`. You can override it with `DATABASE_PATH` in `.env`.
 
+## Gmail MCP Connector
+
+Create a Google OAuth client in Google Cloud Console and save its JSON secret as
+`backend/MCP/gmail/credentials.json`, or set `GMAIL_CLIENT_SECRETS_FILE` in `.env`.
+The redirect URI in Google Cloud must match `GMAIL_REDIRECT_URI`; for local dev that is:
+
+```text
+http://localhost:8000/mcp/gmail/callback
+```
+
+After the backend and frontend are running, use the Gmail button in the chat header
+to connect or disconnect the account. Once connected, the chatbot can search, read,
+label/archive, and send Gmail messages through MCP tools.
+
+## Additional MCP Connectors
+
+The MCP menu also supports Google Drive, YouTube, LinkedIn, Telegram, Notion, and Trello.
+OAuth connectors use these callback URLs:
+
+```text
+http://localhost:8000/mcp/google_drive/callback
+http://localhost:8000/mcp/youtube/callback
+http://localhost:8000/mcp/linkedin/callback
+http://localhost:8000/mcp/notion/callback
+```
+
+Telegram connects from a configured bot token file (`TELEGRAM_BOT_TOKEN_FILE`).
+Trello connects from `TRELLO_API_KEY` and `TRELLO_TOKEN`, or the matching values in
+`backend/MCP/trello/credentials.json`.
+
 ## Tests
 
 Run the backend safety tests:

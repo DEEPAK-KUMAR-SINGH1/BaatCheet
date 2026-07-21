@@ -4,10 +4,12 @@ from typing import Optional
 class ChatRequest(BaseModel):
     thread_id: str
     message: str
+    workspace_id: Optional[str] = None
 
 class NewThreadRequest(BaseModel):
     thread_id: str
     title: Optional[str] = "New Chat"
+    workspace_id: Optional[str] = None
 
 class ThreadTitleRequest(BaseModel):
     title: str

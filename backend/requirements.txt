@@ -14,8 +14,17 @@ duckduckgo-search
 wikipedia
 python-dotenv
 requests
+google-api-python-client
+google-auth
+google-auth-oauthlib
 pydantic[email]
 bcrypt
 python-jose[cryptography]
 python-multipart
 pytest
+python-docx
+olefile
+pywin32; sys_platform == "win32"
+openpyxl
+python-pptx
+reportlab

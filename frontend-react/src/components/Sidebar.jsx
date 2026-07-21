@@ -1,12 +1,192 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { renameThread, deleteThread } from '../api/client.jsx'
 import { useAuth } from '../hooks/useAuth.jsx'
-import { Plus, MessageSquare, Pencil, Trash2, Check, X, LogOut, Bot, ExternalLink, Shield } from 'lucide-react'
+import {
+  BarChart3,
+  Bot,
+  Check,
+  ChevronRight,
+  HelpCircle,
+  LayoutDashboard,
+  LogOut,
+  MessageSquare,
+  Pencil,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  Sparkles,
+  Trash2,
+  UserCircle,
+  X,
+} from 'lucide-react'
 
-export default function Sidebar({ threads, activeId, onSelect, onNew, onDeleted, onRenamed, onAdminClick }) {
+function AccountAvatar({ email, size = 'md' }) {
+  const classes = size === 'sm' ? 'w-7 h-7 text-[10px]' : 'w-9 h-9 text-xs'
+  return (
+    <div className={`${classes} rounded-full bg-amber-500 text-white flex items-center justify-center flex-shrink-0`}>
+      <span className="font-bold">{(email?.[0] || '?').toUpperCase()}</span>
+    </div>
+  )
+}
+
+function AccountPortal({
+  open,
+  anchorRef,
+  email,
+  displayName,
+  planLabel,
+  isAdmin,
+  onClose,
+  onAdminClick,
+  onLogout,
+}) {
+  const portalRef = useRef(null)
+  const [position, setPosition] = useState({ left: 272, top: 120 })
+
+  useEffect(() => {
+    if (!open) return
+
+    const updatePosition = () => {
+      const rect = anchorRef.current?.getBoundingClientRect()
+      if (!rect) return
+      const width = 420
+      const gap = 10
+      const left = Math.min(rect.right + gap, Math.max(12, window.innerWidth - width - 12))
+      const top = Math.min(Math.max(12, rect.top - 280), window.innerHeight - 520)
+      setPosition({ left, top: Math.max(12, top) })
+    }
+
+    const onPointerDown = (event) => {
+      if (portalRef.current?.contains(event.target) || anchorRef.current?.contains(event.target)) return
+      onClose()
+    }
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') onClose()
+    }
+
+    updatePosition()
+    window.addEventListener('resize', updatePosition)
+    window.addEventListener('scroll', updatePosition, true)
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener('scroll', updatePosition, true)
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [anchorRef, onClose, open])
+
+  if (!open) return null
+
+  const adminItems = [
+    { icon: LayoutDashboard, label: 'Admin Panel', section: 'dashboard' },
+    { icon: UserCircle, label: 'Admin profile', section: 'profile' },
+    { icon: BarChart3, label: 'Analytics', section: 'analytics' },
+    { icon: MessageSquare, label: 'Chat history', section: 'chat-history' },
+    { icon: SlidersHorizontal, label: 'Settings and controls', section: 'settings' },
+  ]
+  const openAdminSection = (section) => {
+    if (isAdmin) onAdminClick?.(section)
+  }
+  const userItems = [
+    { icon: Sparkles, label: 'Personalization', action: () => openAdminSection('settings') },
+    { icon: UserCircle, label: 'Profile', action: () => openAdminSection('profile') },
+    { icon: HelpCircle, label: 'Help', action: () => window.open('https://smith.langchain.com', '_blank', 'noopener,noreferrer'), trailing: true },
+  ]
+
+  const run = (action) => {
+    onClose()
+    action?.()
+  }
+
+  return createPortal(
+    <div
+      ref={portalRef}
+      className="fixed z-50 max-h-[calc(100vh-24px)] w-[min(420px,calc(100vw-24px))] overflow-y-auto rounded-2xl border border-gray-200 bg-white shadow-2xl account-portal"
+      style={{ left: position.left, top: position.top }}
+    >
+      <div className="px-5 pt-4 pb-3">
+        <div className="flex items-center gap-2 text-sm text-gray-500">
+          <UserCircle size={18} />
+          <span className="truncate">{email}</span>
+        </div>
+      </div>
+
+      <div className="mx-4 mb-2 rounded-xl bg-gray-50 px-3 py-3 flex items-center gap-3">
+        <AccountAvatar email={email} size="sm" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-gray-800 truncate capitalize">{displayName}</p>
+          <p className="text-xs text-gray-400">{planLabel}</p>
+        </div>
+        <Check size={18} className="text-gray-800" />
+      </div>
+
+      <div className="px-4 pb-2">
+        <button onClick={() => run(onLogout)}
+          className="w-full flex items-center gap-3 px-2 py-2.5 rounded-xl text-sm text-gray-700 hover:bg-gray-50">
+          <Plus size={18} className="text-gray-500" />
+          <span className="flex-1 text-left">Add account</span>
+        </button>
+      </div>
+
+      {isAdmin && (
+        <div className="px-4 py-2 border-t border-gray-100">
+          <p className="px-2 pb-1.5 text-[10px] font-bold uppercase tracking-wide text-gray-400">Admin Panel</p>
+          {adminItems.map(item => (
+            <button key={item.section}
+              onClick={() => run(() => onAdminClick?.(item.section))}
+              className="w-full flex items-center gap-3 px-2 py-2.5 rounded-xl text-sm text-gray-700 hover:bg-gray-50">
+              <item.icon size={18} className="text-gray-500" />
+              <span className="flex-1 text-left">{item.label}</span>
+              <ChevronRight size={16} className="text-gray-300" />
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="px-4 py-2 border-t border-gray-100">
+        {userItems.map(item => (
+          <button key={item.label}
+            onClick={() => run(item.action)}
+            className="w-full flex items-center gap-3 px-2 py-2.5 rounded-xl text-sm text-gray-700 hover:bg-gray-50">
+            <item.icon size={18} className="text-gray-500" />
+            <span className="flex-1 text-left">{item.label}</span>
+            {item.trailing && <ChevronRight size={16} className="text-gray-300" />}
+          </button>
+        ))}
+      </div>
+
+      <div className="px-4 py-3 border-t border-gray-100">
+        <button onClick={() => run(onLogout)}
+          className="w-full flex items-center gap-3 px-2 py-2.5 rounded-xl text-sm text-gray-700 hover:bg-red-50 hover:text-red-600">
+          <LogOut size={18} />
+          <span className="flex-1 text-left">Log out</span>
+        </button>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
+export default function Sidebar({
+  threads,
+  activeId,
+  onSelect,
+  onNew,
+  onDeleted,
+  onRenamed,
+  onAdminClick,
+  searchQuery,
+  onSearchChange,
+  searchResults,
+}) {
   const { email, isAdmin, isApproved, chatCount, logout } = useAuth()
   const [renameId, setRenameId]   = useState(null)
   const [renameVal, setRenameVal] = useState('')
+  const [accountOpen, setAccountOpen] = useState(false)
+  const accountButtonRef = useRef(null)
 
   const startRename = (t) => { setRenameId(t.thread_id); setRenameVal(t.title) }
 
@@ -26,6 +206,8 @@ export default function Sidebar({ threads, activeId, onSelect, onNew, onDeleted,
     : isApproved
     ? <span className="ml-1.5 text-[10px] font-bold bg-green-100 text-green-600 px-1.5 py-0.5 rounded-md">PRO</span>
     : <span className="ml-1.5 text-[10px] font-bold bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-md">FREE</span>
+  const displayName = email?.split('@')[0]?.replace(/[._-]+/g, ' ') || 'User'
+  const planLabel = isAdmin ? 'Admin' : isApproved ? 'Pro' : 'Free'
 
   return (
     <aside className="w-64 flex-shrink-0 bg-white border-r border-gray-100 flex flex-col h-full">
@@ -42,17 +224,6 @@ export default function Sidebar({ threads, activeId, onSelect, onNew, onDeleted,
       </div>
 
       {/* Admin Dashboard button — sirf admin ke liye */}
-      {isAdmin && (
-        <div className="px-3 pt-3">
-          <button onClick={onAdminClick}
-            className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl
-                       bg-red-50 border border-red-200 text-red-600
-                       text-sm font-semibold hover:bg-red-100 transition">
-            <Shield size={15} /> Admin Dashboard
-          </button>
-        </div>
-      )}
-
       {/* New Chat */}
       <div className="px-3 py-3">
         <button onClick={onNew}
@@ -85,6 +256,27 @@ export default function Sidebar({ threads, activeId, onSelect, onNew, onDeleted,
           </div>
         </div>
       )}
+
+      <div className="px-3 pb-2">
+        <div className="relative">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input value={searchQuery}
+            onChange={e => onSearchChange?.(e.target.value)}
+            placeholder="Search chats..."
+            className="w-full pl-8 pr-3 py-2 rounded-xl border border-gray-200 text-xs focus:outline-none focus:border-primary-300" />
+        </div>
+        {searchQuery && searchResults?.length > 0 && (
+          <div className="mt-2 max-h-44 overflow-y-auto bg-white border border-gray-100 rounded-xl shadow-sm">
+            {searchResults.slice(0, 6).map((result, idx) => (
+              <button key={`${result.thread_id}-${idx}`} onClick={() => onSelect(result.thread_id)}
+                className="w-full text-left px-3 py-2 hover:bg-primary-50 border-b border-gray-50 last:border-0">
+                <p className="text-xs font-semibold text-gray-700 truncate">{result.title}</p>
+                <p className="text-[10px] text-gray-400 truncate">{result.match_type}: {result.snippet}</p>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Threads */}
       <div className="flex-1 overflow-y-auto px-3 py-1">
@@ -131,27 +323,34 @@ export default function Sidebar({ threads, activeId, onSelect, onNew, onDeleted,
         ))}
       </div>
 
-      {/* Footer */}
-      <div className="border-t border-gray-100 px-3 py-3 space-y-1">
-        <a href="https://smith.langchain.com" target="_blank" rel="noopener noreferrer"
-          className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition">
-          <ExternalLink size={13} /> LangSmith Traces
-        </a>
-        <div className="flex items-center gap-2 px-3 py-2 rounded-xl">
-          <div className="w-6 h-6 rounded-full bg-primary-100 flex items-center justify-center flex-shrink-0">
-            <span className="text-xs font-bold text-primary-600">{email?.[0]?.toUpperCase() || '?'}</span>
-          </div>
+      <div className="border-t border-gray-100 px-2.5 py-2.5">
+        <button ref={accountButtonRef}
+          onClick={() => setAccountOpen(open => !open)}
+          className={`w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-left transition
+            ${accountOpen ? 'bg-gray-100' : 'hover:bg-gray-50'}`}>
+          <AccountAvatar email={email} size="sm" />
           <div className="flex-1 min-w-0">
-            <div className="flex items-center">
-              <span className="text-xs text-gray-600 truncate">{email}</span>
+            <div className="flex items-center min-w-0">
+              <span className="text-sm font-semibold text-gray-800 truncate capitalize">{displayName}</span>
               {roleBadge}
             </div>
+            <p className="text-xs text-gray-400 truncate">{planLabel}</p>
           </div>
-          <button onClick={logout} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition">
-            <LogOut size={13} />
-          </button>
-        </div>
+          <ChevronRight size={18} className={`text-gray-400 transition ${accountOpen ? 'rotate-180' : ''}`} />
+        </button>
       </div>
+
+      <AccountPortal
+        open={accountOpen}
+        anchorRef={accountButtonRef}
+        email={email}
+        displayName={displayName}
+        planLabel={planLabel}
+        isAdmin={isAdmin}
+        onClose={() => setAccountOpen(false)}
+        onAdminClick={onAdminClick}
+        onLogout={logout}
+      />
     </aside>
   )
 }

@@ -1,6 +1,8 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+const backendTarget = 'http://127.0.0.1:8000'
+
 export default defineConfig({
   plugins: [react()],
   esbuild: {
@@ -16,11 +18,16 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/auth':    'http://localhost:8000',
-      '/threads': 'http://localhost:8000',
-      '/chat':    'http://localhost:8000',
-      '/rag':     'http://localhost:8000',
-      '/admin':   'http://localhost:8000',
+      '/auth': backendTarget,
+      '/threads': backendTarget,
+      '/chat': backendTarget,
+      '/rag': backendTarget,
+      '/admin': backendTarget,
+      '/mcp': backendTarget,
+      '/workspaces': backendTarget,
+      '/sources': backendTarget,
+      '/search': backendTarget,
+      '/public': backendTarget,
     }
   }
 })

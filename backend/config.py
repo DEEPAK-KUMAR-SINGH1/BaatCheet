@@ -38,6 +38,9 @@ CORS_ORIGINS: list[str] = [
     origin.strip() for origin in _CORS_ORIGINS.split(",") if origin.strip()
 ]
 
+# Frontend URL used for OAuth callbacks after a provider redirects to the API.
+FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
 # ─── LANGSMITH ──────────────────────────
 LANGCHAIN_API_KEY:    str = os.getenv("LANGCHAIN_API_KEY", "")
 LANGCHAIN_PROJECT:    str = os.getenv("LANGCHAIN_PROJECT", "chatbot")

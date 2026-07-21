@@ -17,6 +17,12 @@ import operator
 import os
 import sqlite3
 
+from MCP import (
+    get_all_mcp_tools,
+    get_mcp_system_message,
+    reset_current_user_email,
+    set_current_user_email,
+)
 from config import DATABASE_PATH, load_env
 load_env()
 
@@ -66,7 +72,7 @@ def calculator(expression: str) -> str:
     except Exception as e:
         return f'Error: {str(e)}'
 
-tools      = [search_tool, wiki_tool, calculator]
+tools      = [search_tool, wiki_tool, calculator] + get_all_mcp_tools()
 tools_dict = {t.name: t for t in tools}
 
 # ─────────────────────────────────────────
@@ -110,20 +116,60 @@ system_prompt = SystemMessage(content=f"""You are a highly intelligent AI assist
 # NODES
 # ─────────────────────────────────────────
 
-def chat_node(state: ChatState):
-    messages = [system_prompt] + state['messages']
+def chat_node(state: ChatState, config=None):
+    document_context = ""
+    user_email = None
+    if config:
+        metadata = config.get("metadata") or {}
+        document_context = metadata.get("document_context", "")
+        user_email = metadata.get("user_email")
+    messages = [system_prompt]
+    mcp_context = get_mcp_system_message(user_email)
+    if mcp_context:
+        messages.append(SystemMessage(content=f"""## Connected Apps
+{mcp_context}
+"""))
+    if document_context:
+        messages.append(SystemMessage(content=f"""## Workspace Document Context
+Use this context when it is relevant to the user's request. If the question asks about uploaded documents and the answer is not present here, say that clearly. Cite document names in the answer when using this context.
+
+{document_context}
+"""))
+    messages += state['messages']
     response = llm_with_tools.invoke(messages)
     return {'messages': [response]}
 
-def tool_node(state: ChatState):
+def _mcp_user_email_from_config(config) -> str | None:
+    if not config:
+        return None
+    return (config.get("metadata") or {}).get("user_email")
+
+
+def tool_node(state: ChatState, config=None):
     last_msg     = state['messages'][-1]
     tool_results = []
-    for tool_call in last_msg.tool_calls:
-        t      = tools_dict[tool_call['name']]
-        result = t.invoke(tool_call['args'])
-        tool_results.append(
-            ToolMessage(content=str(result), tool_call_id=tool_call['id'])
-        )
+    mcp_token = set_current_user_email(_mcp_user_email_from_config(config))
+    try:
+        for tool_call in last_msg.tool_calls:
+            t = tools_dict.get(tool_call['name'])
+            if not t:
+                result = f"Unknown tool: {tool_call['name']}"
+            else:
+                try:
+                    result = t.invoke(tool_call['args'])
+                except Exception as exc:
+                    logger.warning(
+                        "Tool call failed for %s: %s: %s",
+                        tool_call["name"],
+                        type(exc).__name__,
+                        exc,
+                    )
+                    result = f"{tool_call['name']} tool error: {type(exc).__name__}: {exc}"
+            tool_results.append(
+                ToolMessage(content=str(result), tool_call_id=tool_call['id'])
+            )
+    finally:
+        reset_current_user_email(mcp_token)
     return {'messages': tool_results}
 
 def should_use_tool(state: ChatState):
@@ -187,7 +233,12 @@ def _build_graph(checkpointer):
 # PUBLIC FUNCTIONS
 # ─────────────────────────────────────────
 
-def stream_response(thread_id: str, user_message: str):
+def stream_response(
+    thread_id: str,
+    user_message: str,
+    document_context: str = "",
+    user_email: str | None = None,
+):
     """Yield text chunks for SSE streaming."""
     from langchain_core.messages import AIMessage, HumanMessage
 
@@ -195,7 +246,11 @@ def stream_response(thread_id: str, user_message: str):
     config = {
         'configurable': {'thread_id': thread_id},
         'run_name':     f'chat_{thread_id[:8]}',
-        'metadata':     {'thread_id': thread_id},
+        'metadata':     {
+            'thread_id': thread_id,
+            'document_context': document_context,
+            'user_email': user_email,
+        },
     }
 
     try:

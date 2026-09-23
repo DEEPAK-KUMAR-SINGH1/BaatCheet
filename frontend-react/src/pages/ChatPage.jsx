@@ -7,7 +7,6 @@ import {
   AlertTriangle,
   Bot,
   Database,
-  Download,
   FolderOpen,
   Link,
   Mail,
@@ -30,8 +29,7 @@ import {
   connectGmail,
   disconnectGmail,
   editMessage,
-  exportThread,
-  getMcpConnections,
+  getConnectorConnections,
   getSourceChunk,
   getThreadMessages,
   getThreads,
@@ -54,22 +52,23 @@ import {
   disconnectNotion,
   connectTrello,
   disconnectTrello,
+  connectConnectorWithToken,
 } from '../api/client.jsx'
 
-const MCP_SETUP_STATUSES = new Set(['needs_credentials', 'needs_dependencies'])
+const CONNECTOR_SETUP_STATUSES = new Set(['needs_credentials', 'needs_dependencies'])
 
-const MCP_SERVICES = [
-  { app: 'gmail', name: 'Gmail', icon: Mail, connect: connectGmail, disconnect: disconnectGmail },
-  { app: 'linkedin', name: 'LinkedIn', icon: Users, connect: connectLinkedin, disconnect: disconnectLinkedin },
-  { app: 'google_drive', name: 'Google Drive', icon: FolderOpen, connect: connectGoogleDrive, disconnect: disconnectGoogleDrive },
-  { app: 'youtube', name: 'YouTube', icon: Activity, connect: connectYoutube, disconnect: disconnectYoutube },
-  { app: 'telegram', name: 'Telegram', icon: Bot, connect: connectTelegram, disconnect: disconnectTelegram },
-  { app: 'notion', name: 'Notion', icon: Database, connect: connectNotion, disconnect: disconnectNotion },
-  { app: 'trello', name: 'Trello', icon: Users, connect: connectTrello, disconnect: disconnectTrello },
+const CONNECTOR_SERVICES = [
+  { app: 'gmail', name: 'Gmail', auth: 'Google OAuth', icon: Mail, connect: connectGmail, disconnect: disconnectGmail },
+  { app: 'linkedin', name: 'LinkedIn', auth: 'LinkedIn OAuth', icon: Users, connect: connectLinkedin, disconnect: disconnectLinkedin },
+  { app: 'google_drive', name: 'Google Drive', auth: 'Google OAuth', icon: FolderOpen, connect: connectGoogleDrive, disconnect: disconnectGoogleDrive },
+  { app: 'youtube', name: 'YouTube', auth: 'Google OAuth', icon: Activity, connect: connectYoutube, disconnect: disconnectYoutube },
+  { app: 'telegram', name: 'Telegram', auth: 'Bot token', icon: Bot, connect: connectTelegram, disconnect: disconnectTelegram },
+  { app: 'notion', name: 'Notion', auth: 'Notion OAuth', icon: Database, connect: connectNotion, disconnect: disconnectNotion },
+  { app: 'trello', name: 'Trello', auth: 'Trello token', icon: Users, connect: connectTrello, disconnect: disconnectTrello },
 ]
 
-function mcpServiceName(app) {
-  return MCP_SERVICES.find(service => service.app === app)?.name || app
+function connectorServiceName(app) {
+  return CONNECTOR_SERVICES.find(service => service.app === app)?.name || app
 }
 
 export default function ChatPage() {
@@ -90,29 +89,29 @@ export default function ChatPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [shareInfo, setShareInfo] = useState(null)
-  const [mcpConnections, setMcpConnections] = useState([])
-  const [mcpLoadingApp, setMcpLoadingApp] = useState('')
-  const [mcpNotice, setMcpNotice] = useState('')
-  const [mcpDropdownOpen, setMcpDropdownOpen] = useState(false)
-  const mcpButtonRef = useRef(null)
+  const [connectorConnections, setConnectorConnections] = useState([])
+  const [connectorLoadingApp, setConnectorLoadingApp] = useState('')
+  const [connectorNotice, setConnectorNotice] = useState('')
+  const [connectorsOpen, setConnectorsOpen] = useState(false)
+  const connectorsButtonRef = useRef(null)
   const bottomRef = useRef()
   const scrollAreaRef = useRef(null)
   const stickToBottomRef = useRef(true)
   const abortRef = useRef(null)
 
   const activeWorkspace = workspaces.find(w => w.workspace_id === activeWorkspaceId) || null
-  const mcpServices = MCP_SERVICES.map(service => {
-    const connection = mcpConnections.find(item => item.app === service.app)
+  const connectorServices = CONNECTOR_SERVICES.map(service => {
+    const connection = connectorConnections.find(item => item.app === service.app)
     const connected = Boolean(connection?.connected)
     return {
       ...service,
       connection,
       connected,
-      needsSetup: MCP_SETUP_STATUSES.has(connection?.status),
-      loading: mcpLoadingApp === service.app,
+      needsSetup: CONNECTOR_SETUP_STATUSES.has(connection?.status),
+      loading: connectorLoadingApp === service.app,
     }
   })
-  const connectedMcpCount = mcpServices.filter(service => service.connected).length
+  const connectedConnectorCount = connectorServices.filter(service => service.connected).length
 
   const isNearBottom = useCallback(() => {
     const el = scrollAreaRef.current
@@ -134,54 +133,90 @@ export default function ChatPage() {
     stickToBottomRef.current = isNearBottom()
   }, [isNearBottom])
 
-  const upsertMcpConnection = (connection) => {
+  const upsertConnectorConnection = (connection) => {
     if (!connection?.app) return
-    setMcpConnections(prev => {
+    setConnectorConnections(prev => {
       const withoutApp = prev.filter(c => c.app !== connection.app)
       return [connection, ...withoutApp]
     })
   }
 
-  const refreshMcpConnections = useCallback(async () => {
+  const refreshConnectorConnections = useCallback(async () => {
     try {
-      const data = await getMcpConnections()
-      setMcpConnections(data.connections || [])
+      const data = await getConnectorConnections()
+      setConnectorConnections(data.connections || [])
     } catch {
-      setMcpConnections([])
+      setConnectorConnections([])
     }
   }, [])
 
   useEffect(() => {
     initChat()
-    refreshMcpConnections()
-  }, [refreshMcpConnections])
+    refreshConnectorConnections()
+  }, [refreshConnectorConnections])
 
   useEffect(() => {
-    const onFocus = () => refreshMcpConnections()
+    const onFocus = () => refreshConnectorConnections()
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
-  }, [refreshMcpConnections])
+  }, [refreshConnectorConnections])
 
   useEffect(() => {
+    let cancelled = false
     const params = new URLSearchParams(window.location.search)
-    const app = params.get('mcp')
+    const app = params.get('connector')
     if (!app) return
 
     const status = params.get('status')
     const detail = params.get('detail')
-    const name = mcpServiceName(app)
-    setMcpNotice(
-      status === 'connected'
-        ? `${name} connected.`
-        : detail || `${name} connection failed.`
-    )
-    refreshMcpConnections()
-    params.delete('mcp')
-    params.delete('status')
-    params.delete('detail')
-    const next = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}${window.location.hash}`
-    window.history.replaceState({}, '', next)
-  }, [refreshMcpConnections])
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+    const name = connectorServiceName(app)
+    const cleanupUrl = () => {
+      params.delete('connector')
+      params.delete('status')
+      params.delete('detail')
+      params.delete('state')
+      params.delete('token')
+      const nextHash = hashParams.has('token') ? '' : window.location.hash
+      const next = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}${nextHash}`
+      window.history.replaceState({}, '', next)
+    }
+
+    const completeConnection = async () => {
+      if (app === 'trello' && status === 'token') {
+        const token = params.get('token') || hashParams.get('token')
+        if (!token) {
+          setConnectorNotice('Trello did not return an authorization token.')
+          cleanupUrl()
+          return
+        }
+        try {
+          const connection = await connectConnectorWithToken('trello', token, { state: params.get('state') })
+          if (!cancelled) {
+            upsertConnectorConnection(connection)
+            setConnectorNotice('Trello connected.')
+          }
+        } catch (err) {
+          if (!cancelled) setConnectorNotice(err.message || 'Trello connection failed.')
+        } finally {
+          refreshConnectorConnections()
+          cleanupUrl()
+        }
+        return
+      }
+
+      setConnectorNotice(
+        status === 'connected'
+          ? `${name} connected.`
+          : detail || `${name} connection failed.`
+      )
+      refreshConnectorConnections()
+      cleanupUrl()
+    }
+
+    completeConnection()
+    return () => { cancelled = true }
+  }, [refreshConnectorConnections])
 
   useEffect(() => {
     if (!isAdmin && !isApproved && chatCount >= 5) setLimitReached(true)
@@ -320,32 +355,32 @@ export default function ChatPage() {
     } catch {}
   }
 
-  const handleMcpConnect = async (service) => {
-    setMcpLoadingApp(service.app)
-    setMcpNotice('')
+  const handleConnectorConnect = async (service) => {
+    setConnectorLoadingApp(service.app)
+    setConnectorNotice('')
     try {
       const data = await service.connect()
       if (!data.auth_url) throw new Error(`${service.name} did not return an authorization URL.`)
       window.location.assign(data.auth_url)
     } catch (err) {
-      setMcpNotice(err.message || `Could not start ${service.name} connection.`)
-      refreshMcpConnections()
+      setConnectorNotice(err.message || `Could not start ${service.name} connection.`)
+      refreshConnectorConnections()
     } finally {
-      setMcpLoadingApp('')
+      setConnectorLoadingApp('')
     }
   }
 
-  const handleMcpDisconnect = async (service) => {
-    setMcpLoadingApp(service.app)
-    setMcpNotice('')
+  const handleConnectorDisconnect = async (service) => {
+    setConnectorLoadingApp(service.app)
+    setConnectorNotice('')
     try {
       const data = await service.disconnect()
-      upsertMcpConnection(data)
-      setMcpNotice(`${service.name} disconnected.`)
+      upsertConnectorConnection(data)
+      setConnectorNotice(`${service.name} disconnected.`)
     } catch (err) {
-      setMcpNotice(err.message || `Could not disconnect ${service.name}.`)
+      setConnectorNotice(err.message || `Could not disconnect ${service.name}.`)
     } finally {
-      setMcpLoadingApp('')
+      setConnectorLoadingApp('')
     }
   }
 
@@ -570,15 +605,15 @@ export default function ChatPage() {
             <span className="text-xs text-gray-500 flex-1 min-w-[220px] truncate">
               Hybrid mode: documents, web search, Wikipedia, calculator, and connected apps can work together.
             </span>
-            <button ref={mcpButtonRef} onClick={() => setMcpDropdownOpen(open => !open)} title="MCP integrations"
+            <button ref={connectorsButtonRef} onClick={() => setConnectorsOpen(open => !open)} title="Connectors"
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition
-                ${mcpDropdownOpen
+                ${connectorsOpen
                   ? 'bg-primary-50 text-primary-700 border-primary-100'
                   : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-primary-50 hover:text-primary-700 hover:border-primary-100'}`}>
-              <Settings size={12} /> MCP
-              {connectedMcpCount > 0 && (
+              <Settings size={12} /> Connectors
+              {connectedConnectorCount > 0 && (
                 <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-100 px-1 text-[10px] font-bold text-emerald-700">
-                  {connectedMcpCount}
+                  {connectedConnectorCount}
                 </span>
               )}
             </button>
@@ -588,24 +623,16 @@ export default function ChatPage() {
                 <Square size={12} /> Stop
               </button>
             )}
-            <button onClick={() => exportThread(activeId, 'markdown')} disabled={!activeId}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-50 text-gray-600 border border-gray-200 text-xs font-semibold disabled:opacity-50">
-              <Download size={12} /> MD
-            </button>
-            <button onClick={() => exportThread(activeId, 'pdf')} disabled={!activeId}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-50 text-gray-600 border border-gray-200 text-xs font-semibold disabled:opacity-50">
-              <Download size={12} /> PDF
-            </button>
             <button onClick={handleShare} disabled={!activeId}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary-50 text-primary-700 border border-primary-100 text-xs font-semibold disabled:opacity-50">
               <Link size={12} /> Share
             </button>
           </div>
 
-          {mcpNotice && (
+          {connectorNotice && (
             <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 flex items-center gap-2 text-xs text-gray-600">
-              <span className="flex-1 truncate">{mcpNotice}</span>
-              <button onClick={() => setMcpNotice('')} className="p-1 rounded-lg text-gray-400 hover:bg-white">
+              <span className="flex-1 truncate">{connectorNotice}</span>
+              <button onClick={() => setConnectorNotice('')} className="p-1 rounded-lg text-gray-400 hover:bg-white">
                 <X size={13} />
               </button>
             </div>
@@ -712,22 +739,22 @@ export default function ChatPage() {
             </div>
           </aside>
         )}
-        {mcpDropdownOpen && <McpPortal
-          open={mcpDropdownOpen}
-          anchorRef={mcpButtonRef}
-          services={mcpServices}
-          loadingApp={mcpLoadingApp}
-          onConnect={handleMcpConnect}
-          onDisconnect={handleMcpDisconnect}
-          onRefresh={refreshMcpConnections}
-          onClose={() => setMcpDropdownOpen(false)}
+        {connectorsOpen && <ConnectorsPortal
+          open={connectorsOpen}
+          anchorRef={connectorsButtonRef}
+          services={connectorServices}
+          loadingApp={connectorLoadingApp}
+          onConnect={handleConnectorConnect}
+          onDisconnect={handleConnectorDisconnect}
+          onRefresh={refreshConnectorConnections}
+          onClose={() => setConnectorsOpen(false)}
         />}
       </div>
     </div>
   )
   }
 
-function McpPortal({
+function ConnectorsPortal({
   open,
   anchorRef,
   services,
@@ -789,7 +816,7 @@ function McpPortal({
   return createPortal(
     <div
       ref={portalRef}
-      className="mcp-portal fixed z-50 w-[min(380px,calc(100vw-24px))] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl"
+      className="connectors-portal fixed z-50 w-[min(380px,calc(100vw-24px))] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl"
       style={{ left: position.left, top: position.top }}
     >
       <div className="border-b border-gray-100 px-4 py-3">
@@ -798,14 +825,14 @@ function McpPortal({
             <Settings size={17} />
           </div>
           <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-bold text-gray-800">MCP</h3>
+            <h3 className="text-sm font-bold text-gray-800">Connectors</h3>
             <p className="text-xs text-gray-400">{connectedCount}/{services.length} connected</p>
           </div>
-          <button onClick={onRefresh} disabled={Boolean(loadingApp)} title="Refresh MCP status"
+          <button onClick={onRefresh} disabled={Boolean(loadingApp)} title="Refresh connector status"
             className="flex h-8 w-8 items-center justify-center rounded-xl text-gray-400 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50">
             <RefreshCw size={14} />
           </button>
-          <button onClick={onClose} title="Close MCP integrations"
+          <button onClick={onClose} title="Close connectors"
             className="flex h-8 w-8 items-center justify-center rounded-xl text-gray-400 hover:bg-gray-50 hover:text-gray-700">
             <X size={14} />
           </button>
@@ -814,7 +841,7 @@ function McpPortal({
 
       <div className="max-h-[min(68vh,520px)] space-y-2 overflow-y-auto p-2">
         {services.map(service => (
-          <McpServiceCard
+          <ConnectorServiceCard
             key={service.app}
             service={service}
             loadingApp={loadingApp}
@@ -828,12 +855,12 @@ function McpPortal({
   )
 }
 
-function McpServiceCard({ service, loadingApp, onConnect, onDisconnect }) {
+function ConnectorServiceCard({ service, loadingApp, onConnect, onDisconnect }) {
   const Icon = service.icon
   const busy = Boolean(loadingApp)
-  const status = getMcpStatus(service)
-  const message = service.connection?.message || `${service.name} MCP`
-  const capabilityLabel = formatMcpCapabilities(service.connection?.capabilities)
+  const status = getConnectorStatus(service)
+  const message = service.connection?.message || `Connect with ${service.auth}.`
+  const capabilityLabel = formatConnectorCapabilities(service.connection?.capabilities)
   const header = (
     <>
       <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl ${service.connected ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-50 text-gray-500'}`}>
@@ -842,9 +869,10 @@ function McpServiceCard({ service, loadingApp, onConnect, onDisconnect }) {
       <div className="min-w-0 flex-1 text-left">
         <div className="flex min-w-0 items-center gap-2">
           <p className="truncate text-sm font-semibold text-gray-800">{service.name}</p>
-          <McpStatusPill status={status} />
+          <ConnectorStatusPill status={status} />
         </div>
         <p className="mt-0.5 truncate text-xs text-gray-400">{message}</p>
+        <p className="mt-0.5 text-[11px] font-semibold text-gray-400">{service.auth}</p>
       </div>
     </>
   )
@@ -881,7 +909,7 @@ function McpServiceCard({ service, loadingApp, onConnect, onDisconnect }) {
   )
 }
 
-function McpStatusPill({ status }) {
+function ConnectorStatusPill({ status }) {
   return (
     <span className={`flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${status.className}`}>
       {status.label}
@@ -889,7 +917,7 @@ function McpStatusPill({ status }) {
   )
 }
 
-function getMcpStatus(service) {
+function getConnectorStatus(service) {
   if (service.connected) {
     return { label: 'Connected', className: 'bg-emerald-100 text-emerald-800' }
   }
@@ -899,7 +927,7 @@ function getMcpStatus(service) {
   return { label: 'Not connected', className: 'bg-gray-100 text-gray-600' }
 }
 
-function formatMcpCapabilities(capabilities) {
+function formatConnectorCapabilities(capabilities) {
   if (!capabilities?.length) return 'Ready for chat tools'
   return capabilities
     .slice(0, 3)

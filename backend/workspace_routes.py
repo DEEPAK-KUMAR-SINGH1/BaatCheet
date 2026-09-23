@@ -1,8 +1,6 @@
-import io
 import os
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
-from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel
 
 from auth_routes import get_current_user
@@ -15,7 +13,6 @@ from database import (
     get_document_chunk,
     get_public_share,
     get_share_for_thread,
-    get_thread_messages_full,
     get_workspace,
     get_workspace_documents,
     list_workspaces_for_user,
@@ -165,71 +162,6 @@ def source_preview(
 @router.get("/search")
 def search(q: str = Query(..., min_length=1), current_user=Depends(get_current_user)):
     return search_user_threads(current_user["email"], q.strip())
-
-
-def _thread_markdown(thread, messages):
-    lines = [f"# {thread['title']}", ""]
-    for msg in messages:
-        label = "User" if msg["role"] == "user" else "Assistant"
-        lines.extend([f"## {label}", "", msg["content"], ""])
-        sources = (msg.get("metadata") or {}).get("sources") or []
-        if sources:
-            lines.append("Sources:")
-            for source in sources:
-                page = f", page {source.get('page')}" if source.get("page") else ""
-                lines.append(
-                    f"- {source.get('filename', 'document')}{page}, chunk {source.get('chunk_index')}"
-                )
-            lines.append("")
-    return "\n".join(lines).strip() + "\n"
-
-
-@router.get("/threads/{thread_id}/export")
-def export_thread(
-    thread_id: str,
-    format: str = "markdown",
-    current_user=Depends(get_current_user),
-):
-    from database import get_thread
-
-    verify_thread_owner(thread_id, current_user["email"])
-    thread = get_thread(thread_id)
-    messages = get_thread_messages_full(thread_id)
-    markdown = _thread_markdown(thread, messages)
-
-    if format == "markdown":
-        return PlainTextResponse(
-            markdown,
-            media_type="text/markdown",
-            headers={"Content-Disposition": f'attachment; filename="{thread_id}.md"'},
-        )
-    if format == "pdf":
-        try:
-            from reportlab.lib.pagesizes import letter
-            from reportlab.pdfgen import canvas
-        except ImportError as exc:
-            raise HTTPException(500, "PDF export requires reportlab") from exc
-
-        buffer = io.BytesIO()
-        pdf = canvas.Canvas(buffer, pagesize=letter)
-        width, height = letter
-        y = height - 48
-        pdf.setFont("Helvetica", 10)
-        for raw_line in markdown.splitlines():
-            line = raw_line[:110]
-            if y < 48:
-                pdf.showPage()
-                pdf.setFont("Helvetica", 10)
-                y = height - 48
-            pdf.drawString(48, y, line)
-            y -= 14
-        pdf.save()
-        return Response(
-            buffer.getvalue(),
-            media_type="application/pdf",
-            headers={"Content-Disposition": f'attachment; filename="{thread_id}.pdf"'},
-        )
-    raise HTTPException(400, "Format must be markdown or pdf")
 
 
 @router.post("/threads/{thread_id}/share")

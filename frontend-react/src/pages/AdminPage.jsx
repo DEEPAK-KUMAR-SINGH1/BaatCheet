@@ -142,7 +142,7 @@ const adminSections = [
   ['chat-history', 'Chats'],
   ['library', 'Library'],
   ['settings', 'Settings'],
-  ['mcp', 'MCP Integrations'],
+  ['connectors', 'Connectors'],
 ]
 
 export default function AdminPage() {
@@ -349,7 +349,7 @@ export default function AdminPage() {
             <ManagementTile icon={History} title="Chat History" description="Inspect recent chatbot conversations and remove stale threads." meta={`${threads.length} recent threads loaded`} onClick={() => scrollToSection('chat-history')} />
             <ManagementTile icon={FolderOpen} title="File Library" description="Manage uploaded documents, indexing state, and failed files." meta={`${documents.length} documents loaded`} onClick={() => scrollToSection('library')} />
             <ManagementTile icon={SlidersHorizontal} title="Chatbot Settings" description="See current tool, app, sharing, and retrieval controls." meta="Feature controls" onClick={() => scrollToSection('settings')} />
-            <ManagementTile icon={Mail} title="Connected Apps" description="Monitor Gmail MCP readiness from the chatbot header connection flow." meta="Gmail MCP available" onClick={() => navigate('/')} />
+            <ManagementTile icon={Mail} title="Connected Apps" description="Connect apps from the chatbot header and use them as tools." meta="OAuth and app auth" onClick={() => navigate('/')} />
           </div>
         </section>
 
@@ -586,8 +586,8 @@ export default function AdminPage() {
                 <StatusPill label="Wikipedia" />
                 <StatusPill label="Calculator" />
                 <StatusPill label="Document RAG" />
-                <button onClick={() => { window.history.replaceState({}, '', `#mcp`); scrollToSection('mcp'); }} className="px-3 py-2 rounded-lg text-xs font-semibold text-gray-500 hover:bg-gray-50 hover:text-gray-800 whitespace-nowrap">
-                  MCP Integrations
+                <button onClick={() => { window.history.replaceState({}, '', `#connectors`); scrollToSection('connectors'); }} className="px-3 py-2 rounded-lg text-xs font-semibold text-gray-500 hover:bg-gray-50 hover:text-gray-800 whitespace-nowrap">
+                  Connectors
                 </button>
                 <StatusPill label="Share links" />
               </div>
@@ -603,7 +603,7 @@ export default function AdminPage() {
         </section>
 
         <section>
-          <SectionTitle id="mcp" icon={Settings} title="MCP Integrations" description="Manage connections to external services like Gmail, LinkedIn, and more." />
+          <SectionTitle id="connectors" icon={Settings} title="Connectors" description="Manage app connections that the chatbot can use as tools." />
           <div className="grid grid-cols-1 gap-4">
             <ManagementTile icon={Mail} title="Gmail" description="Connect to Gmail to read and send emails." meta="Manage your mailbox" onClick={() => {/* TODO: Implement connect */}} />
             <ManagementTile icon={Users} title="LinkedIn" description="Connect to LinkedIn to access your profile and network." meta="Professional network" onClick={() => {/* TODO: Implement connect */}} />

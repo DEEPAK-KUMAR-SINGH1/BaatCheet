@@ -17,9 +17,9 @@ import operator
 import os
 import sqlite3
 
-from MCP import (
-    get_all_mcp_tools,
-    get_mcp_system_message,
+from Connectors import (
+    get_all_connector_tools,
+    get_connector_system_message,
     reset_current_user_email,
     set_current_user_email,
 )
@@ -33,8 +33,17 @@ logger = logging.getLogger(__name__)
 # TOOLS
 # ─────────────────────────────────────────
 
-search_tool = DuckDuckGoSearchResults(num_results=8)
-wiki_tool   = WikipediaQueryRun(api_wrapper=WikipediaAPIWrapper())
+try:
+    search_tool = DuckDuckGoSearchResults(num_results=8)
+except ImportError as exc:
+    logger.warning("DuckDuckGo search tool unavailable: %s", exc)
+
+    @tool
+    def search_tool(query: str) -> str:
+        """Web search is unavailable until the ddgs package is installed."""
+        return "Web search is unavailable. Install the ddgs package and restart the backend."
+
+wiki_tool = WikipediaQueryRun(api_wrapper=WikipediaAPIWrapper())
 
 _ALLOWED_MATH_OPS = {
     ast.Add: operator.add,
@@ -72,7 +81,7 @@ def calculator(expression: str) -> str:
     except Exception as e:
         return f'Error: {str(e)}'
 
-tools      = [search_tool, wiki_tool, calculator] + get_all_mcp_tools()
+tools      = [search_tool, wiki_tool, calculator] + get_all_connector_tools()
 tools_dict = {t.name: t for t in tools}
 
 # ─────────────────────────────────────────
@@ -124,10 +133,10 @@ def chat_node(state: ChatState, config=None):
         document_context = metadata.get("document_context", "")
         user_email = metadata.get("user_email")
     messages = [system_prompt]
-    mcp_context = get_mcp_system_message(user_email)
-    if mcp_context:
+    connector_context = get_connector_system_message(user_email)
+    if connector_context:
         messages.append(SystemMessage(content=f"""## Connected Apps
-{mcp_context}
+{connector_context}
 """))
     if document_context:
         messages.append(SystemMessage(content=f"""## Workspace Document Context
@@ -139,7 +148,7 @@ Use this context when it is relevant to the user's request. If the question asks
     response = llm_with_tools.invoke(messages)
     return {'messages': [response]}
 
-def _mcp_user_email_from_config(config) -> str | None:
+def _connector_user_email_from_config(config) -> str | None:
     if not config:
         return None
     return (config.get("metadata") or {}).get("user_email")
@@ -148,7 +157,7 @@ def _mcp_user_email_from_config(config) -> str | None:
 def tool_node(state: ChatState, config=None):
     last_msg     = state['messages'][-1]
     tool_results = []
-    mcp_token = set_current_user_email(_mcp_user_email_from_config(config))
+    connector_token = set_current_user_email(_connector_user_email_from_config(config))
     try:
         for tool_call in last_msg.tool_calls:
             t = tools_dict.get(tool_call['name'])
@@ -169,7 +178,7 @@ def tool_node(state: ChatState, config=None):
                 ToolMessage(content=str(result), tool_call_id=tool_call['id'])
             )
     finally:
-        reset_current_user_email(mcp_token)
+        reset_current_user_email(connector_token)
     return {'messages': tool_results}
 
 def should_use_tool(state: ChatState):

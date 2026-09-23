@@ -121,19 +121,6 @@ def login(req: LoginRequest):
     if not check_password(req.password, user["password_hash"]):
         raise HTTPException(400, "Incorrect password.")
 
-    otp = generate_otp()
-    store_otp(req.email, otp, "login")
-    send_otp_email(req.email, otp, "login")
-    return {"message": "OTP sent to your email."}
-
-
-@router.post("/login/verify")
-def login_verify(req: OTPVerify):
-    if not verify_otp(req.email, req.otp, "login"):
-        raise HTTPException(400, "Invalid or expired OTP")
-    user = get_user(req.email)
-    if not user:
-        raise HTTPException(400, "User not found")
     token = create_token(req.email)
     return {
         "message":     "Login successful!",

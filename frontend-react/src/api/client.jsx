@@ -18,9 +18,6 @@ export const authSignupVerify = (email, otp) =>
 export const authLogin = (email, password) =>
   post('/auth/login', { email, password }, false)
 
-export const authLoginVerify = (email, otp) =>
-  post('/auth/login/verify', { email, otp }, false)
-
 export const authForgotPassword = (email) =>
   post('/auth/forgot-password', { email }, false)
 
@@ -116,60 +113,46 @@ export const revokeThreadShare = (thread_id) =>
 export const getPublicShare = (token) =>
   getPublic(`/public/share/${token}`)
 
-export const getMcpConnections = () =>
-  get('/mcp/connections')
+export const getConnectorConnections = () =>
+  get('/connectors/connections')
 
 export const connectGmail = () =>
-  post('/mcp/gmail/connect', {})
+  post('/connectors/gmail/connect', {})
 
 export const disconnectGmail = () =>
-  del('/mcp/gmail')
+  del('/connectors/gmail')
 
-// LinkedIn MCP
 export const connectLinkedin = () =>
-  post('/mcp/linkedin/connect', {})
+  post('/connectors/linkedin/connect', {})
 export const disconnectLinkedin = () =>
-  del('/mcp/linkedin')
+  del('/connectors/linkedin')
 
-// Google Drive MCP
 export const connectGoogleDrive = () =>
-  post('/mcp/google_drive/connect', {})
+  post('/connectors/google_drive/connect', {})
 export const disconnectGoogleDrive = () =>
-  del('/mcp/google_drive')
+  del('/connectors/google_drive')
 
-// YouTube MCP
 export const connectYoutube = () =>
-  post('/mcp/youtube/connect', {})
+  post('/connectors/youtube/connect', {})
 export const disconnectYoutube = () =>
-  del('/mcp/youtube')
+  del('/connectors/youtube')
 
-// Telegram MCP
 export const connectTelegram = () =>
-  post('/mcp/telegram/connect', {})
+  post('/connectors/telegram/connect', {})
 export const disconnectTelegram = () =>
-  del('/mcp/telegram')
+  del('/connectors/telegram')
 
-// Notion MCP
 export const connectNotion = () =>
-  post('/mcp/notion/connect', {})
+  post('/connectors/notion/connect', {})
 export const disconnectNotion = () =>
-  del('/mcp/notion')
+  del('/connectors/notion')
 
-// Trello MCP
 export const connectTrello = () =>
-  post('/mcp/trello/connect', {})
+  post('/connectors/trello/connect', {})
 export const disconnectTrello = () =>
-  del('/mcp/trello')
-
-export const exportThread = async (thread_id, format = 'markdown') => {
-  const res = await fetch(`/threads/${thread_id}/export?format=${encodeURIComponent(format)}`, {
-    headers: { Authorization: `Bearer ${getToken()}` },
-  })
-  if (!res.ok) throw new Error(await readError(res, 'Export failed'))
-  const blob = await res.blob()
-  const ext = format === 'pdf' ? 'pdf' : 'md'
-  downloadBlob(blob, `chat-${thread_id}.${ext}`)
-}
+  del('/connectors/trello')
+export const connectConnectorWithToken = (app, token, extra = {}) =>
+  post(`/connectors/${app}/token`, { token, extra })
 
 export async function* streamChat(thread_id, message, workspace_id = null, signal) {
   yield* streamEvents('/chat', { thread_id, message, workspace_id }, signal)
@@ -341,15 +324,4 @@ async function* parseNDJSON(body) {
       } catch {}
     }
   }
-}
-
-function downloadBlob(blob, filename) {
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-  URL.revokeObjectURL(url)
 }

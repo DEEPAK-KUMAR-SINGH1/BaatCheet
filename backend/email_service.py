@@ -6,7 +6,7 @@ from config import SENDER_EMAIL, APP_PASSWORD
 
 def send_otp_email(to_email: str, otp: str, purpose: str = "verify"):
     """
-    purpose: "verify" | "login" | "reset"
+    purpose: "verify" | "reset"
     """
 
     if purpose == "verify":
@@ -14,11 +14,6 @@ def send_otp_email(to_email: str, otp: str, purpose: str = "verify"):
         heading = "Welcome! Verify Your Email"
         body_line = "You've just signed up for <b>AI Assistant</b>. Use the OTP below to verify your account:"
         note = "This OTP is valid for <b>10 minutes</b>. If you didn't sign up, please ignore this email."
-    elif purpose == "login":
-        subject = "🔐 Your Login OTP — AI Assistant"
-        heading = "Login OTP"
-        body_line = "Use the OTP below to log in to your <b>AI Assistant</b> account:"
-        note = "This OTP is valid for <b>10 minutes</b>. If you didn't request this, please ignore."
     else:  # reset
         subject = "🔑 Reset Your Password — AI Assistant"
         heading = "Reset Your Password"
@@ -117,4 +112,3 @@ def send_otp_email(to_email: str, otp: str, purpose: str = "verify"):
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
         server.login(SENDER_EMAIL, APP_PASSWORD)
         server.sendmail(SENDER_EMAIL, to_email, msg.as_string())
-

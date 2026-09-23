@@ -106,7 +106,7 @@ body {
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 .account-portal,
-.mcp-portal {
+.connectors-portal {
   animation: account-pop 120ms ease-out;
 }
 

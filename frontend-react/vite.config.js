@@ -23,7 +23,7 @@ export default defineConfig({
       '/chat': backendTarget,
       '/rag': backendTarget,
       '/admin': backendTarget,
-      '/mcp': backendTarget,
+      '/connectors': backendTarget,
       '/workspaces': backendTarget,
       '/sources': backendTarget,
       '/search': backendTarget,

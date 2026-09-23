@@ -11,6 +11,7 @@ langsmith
 chromadb
 pymupdf
 duckduckgo-search
+ddgs
 wikipedia
 python-dotenv
 requests

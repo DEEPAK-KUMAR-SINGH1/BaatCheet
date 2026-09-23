@@ -7,7 +7,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
-from MCP.routes import router as mcp_router
+from Connectors.routes import router as connectors_router
 from admin_routes import router as admin_router
 from auth import get_chat_count, increment_chat_count
 from auth_routes import get_current_user, router as auth_router
@@ -66,7 +66,7 @@ app.include_router(auth_router)
 app.include_router(rag_router)
 app.include_router(admin_router)
 app.include_router(workspace_router)
-app.include_router(mcp_router)
+app.include_router(connectors_router)
 
 
 @app.get("/threads")

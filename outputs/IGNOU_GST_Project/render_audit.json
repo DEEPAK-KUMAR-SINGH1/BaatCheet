@@ -1,0 +1,385 @@
+{
+  "pages": 76,
+  "headings": [
+    {
+      "title": "Project report",
+      "planned": 1,
+      "page": 1
+    },
+    {
+      "title": "Certificate of originality",
+      "planned": 2,
+      "page": 2
+    },
+    {
+      "title": "Acknowledgement and document note",
+      "planned": 3,
+      "page": 3
+    },
+    {
+      "title": "Abstract",
+      "planned": 4,
+      "page": 4
+    },
+    {
+      "title": "Table of contents — I",
+      "planned": 5,
+      "page": 5
+    },
+    {
+      "title": "Table of contents — II",
+      "planned": 6,
+      "page": 6
+    },
+    {
+      "title": "List of figures",
+      "planned": 7,
+      "page": 7
+    },
+    {
+      "title": "List of tables",
+      "planned": 8,
+      "page": 8
+    },
+    {
+      "title": "Abbreviations and conventions",
+      "planned": 9,
+      "page": 9
+    },
+    {
+      "title": "Chapter 1 — Introduction",
+      "planned": 10,
+      "page": 10
+    },
+    {
+      "title": "1.2 The enterprise behind the tax return",
+      "planned": 11,
+      "page": 11
+    },
+    {
+      "title": "1.3 GST’s institutional structure",
+      "planned": 12,
+      "page": 12
+    },
+    {
+      "title": "1.4 Input tax credit and value addition",
+      "planned": 13,
+      "page": 13
+    },
+    {
+      "title": "1.5 Defining SMEs and MSMEs",
+      "planned": 14,
+      "page": 14
+    },
+    {
+      "title": "1.6 Economic relevance and statistical boundaries",
+      "planned": 15,
+      "page": 15
+    },
+    {
+      "title": "1.7 Rationale of the study",
+      "planned": 16,
+      "page": 16
+    },
+    {
+      "title": "1.8 Objectives and research questions",
+      "planned": 17,
+      "page": 17
+    },
+    {
+      "title": "1.9 Scope and time boundaries",
+      "planned": 18,
+      "page": 18
+    },
+    {
+      "title": "1.10 Conceptual framework",
+      "planned": 19,
+      "page": 19
+    },
+    {
+      "title": "1.11 Stakeholders and practical significance",
+      "planned": 20,
+      "page": 20
+    },
+    {
+      "title": "1.12 Organisation of the report",
+      "planned": 21,
+      "page": 21
+    },
+    {
+      "title": "Chapter 2 — Review of Literature",
+      "planned": 22,
+      "page": 22
+    },
+    {
+      "title": "2.2 Tax design and the credit chain",
+      "planned": 23,
+      "page": 23
+    },
+    {
+      "title": "2.3 Evidence on revenue performance",
+      "planned": 24,
+      "page": 24
+    },
+    {
+      "title": "2.4 Compliance costs and firm size",
+      "planned": 25,
+      "page": 25
+    },
+    {
+      "title": "2.5 Transition, credit and liquidity",
+      "planned": 26,
+      "page": 26
+    },
+    {
+      "title": "2.6 Published industry surveys",
+      "planned": 27,
+      "page": 27
+    },
+    {
+      "title": "2.7 Technology and administrative guidance",
+      "planned": 28,
+      "page": 28
+    },
+    {
+      "title": "2.8 Comparative literature matrix",
+      "planned": 29,
+      "page": 29
+    },
+    {
+      "title": "2.9 Synthesis and unresolved questions",
+      "planned": 30,
+      "page": 30
+    },
+    {
+      "title": "2.10 Research gap and analytical propositions",
+      "planned": 31,
+      "page": 31
+    },
+    {
+      "title": "Chapter 3 — Research Methodology",
+      "planned": 32,
+      "page": 32
+    },
+    {
+      "title": "3.2 Selection of documentary evidence",
+      "planned": 33,
+      "page": 33
+    },
+    {
+      "title": "3.3 Collection and extraction procedure",
+      "planned": 34,
+      "page": 34
+    },
+    {
+      "title": "3.4 Operational definitions",
+      "planned": 35,
+      "page": 35
+    },
+    {
+      "title": "3.5 Analytical techniques",
+      "planned": 36,
+      "page": 36
+    },
+    {
+      "title": "3.6 Reliability, validity and comparability",
+      "planned": 37,
+      "page": 37
+    },
+    {
+      "title": "3.7 Research integrity and secondary survey evidence",
+      "planned": 38,
+      "page": 38
+    },
+    {
+      "title": "3.8 Limitations and research boundaries",
+      "planned": 39,
+      "page": 39
+    },
+    {
+      "title": "Chapter 4 — Analysis of Impact of GST on SMEs",
+      "planned": 40,
+      "page": 40
+    },
+    {
+      "title": "4.2 Gross and net GST collections",
+      "planned": 41,
+      "page": 41
+    },
+    {
+      "title": "4.3 Why revenue is not a profitability measure",
+      "planned": 42,
+      "page": 42
+    },
+    {
+      "title": "4.4 MSME economic contribution",
+      "planned": 43,
+      "page": 43
+    },
+    {
+      "title": "4.5 Export-related evidence",
+      "planned": 44,
+      "page": 44
+    },
+    {
+      "title": "4.6 Compliance activities and costs",
+      "planned": 45,
+      "page": 45
+    },
+    {
+      "title": "4.7 Fixed costs and business scale",
+      "planned": 46,
+      "page": 46
+    },
+    {
+      "title": "4.8 Digital records and e-invoicing",
+      "planned": 47,
+      "page": 47
+    },
+    {
+      "title": "4.9 Input tax credit: worked example",
+      "planned": 48,
+      "page": 48
+    },
+    {
+      "title": "4.10 Supplier risk and reconciliation",
+      "planned": 49,
+      "page": 49
+    },
+    {
+      "title": "4.11 Working-capital timing",
+      "planned": 50,
+      "page": 50
+    },
+    {
+      "title": "4.12 Financing-cost sensitivity",
+      "planned": 51,
+      "page": 51
+    },
+    {
+      "title": "4.13 Pricing and commercial incidence",
+      "planned": 52,
+      "page": 52
+    },
+    {
+      "title": "4.14 Interstate trade and logistics",
+      "planned": 53,
+      "page": 53
+    },
+    {
+      "title": "4.15 Formalisation and access to finance",
+      "planned": 54,
+      "page": 54
+    },
+    {
+      "title": "4.16 Composition and QRMP trade-offs",
+      "planned": 55,
+      "page": 55
+    },
+    {
+      "title": "4.17 Manufacturing, trading and services",
+      "planned": 56,
+      "page": 56
+    },
+    {
+      "title": "4.18 Small exporters and refund timing",
+      "planned": 57,
+      "page": 57
+    },
+    {
+      "title": "4.19 Published survey responses",
+      "planned": 58,
+      "page": 58
+    },
+    {
+      "title": "4.20 Post-period policy and survey update",
+      "planned": 59,
+      "page": 59
+    },
+    {
+      "title": "4.21 Illustrative enterprise scenarios",
+      "planned": 60,
+      "page": 60
+    },
+    {
+      "title": "4.22 Risk and control framework",
+      "planned": 61,
+      "page": 61
+    },
+    {
+      "title": "4.23 Integrated assessment",
+      "planned": 62,
+      "page": 62
+    },
+    {
+      "title": "Chapter 5 — Findings, Suggestions and Conclusion",
+      "planned": 63,
+      "page": 63
+    },
+    {
+      "title": "5.2 Recommendations for enterprises and administration",
+      "planned": 64,
+      "page": 64
+    },
+    {
+      "title": "5.3 Implementation responsibilities and monitoring",
+      "planned": 65,
+      "page": 65
+    },
+    {
+      "title": "5.4 Implications of the study",
+      "planned": 66,
+      "page": 66
+    },
+    {
+      "title": "5.5 Limitations and directions for further research",
+      "planned": 67,
+      "page": 67
+    },
+    {
+      "title": "5.6 Conclusion",
+      "planned": 68,
+      "page": 68
+    },
+    {
+      "title": "References — I",
+      "planned": 69,
+      "page": 69
+    },
+    {
+      "title": "References — II",
+      "planned": 70,
+      "page": 70
+    },
+    {
+      "title": "References — III",
+      "planned": 71,
+      "page": 71
+    },
+    {
+      "title": "Appendix A — Secondary-data source register",
+      "planned": 72,
+      "page": 72
+    },
+    {
+      "title": "A.2 Research and published-survey register",
+      "planned": 73,
+      "page": 73
+    },
+    {
+      "title": "Appendix B — Data and calculation audit",
+      "planned": 74,
+      "page": 74
+    },
+    {
+      "title": "B.2 Derived measures and calculation audit",
+      "planned": 75,
+      "page": 75
+    },
+    {
+      "title": "Appendix C — Submission assembly checklist",
+      "planned": 76,
+      "page": 76
+    }
+  ]
+}

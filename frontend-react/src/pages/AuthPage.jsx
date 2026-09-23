@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../hooks/useAuth.jsx'
-import { authSignup, authSignupVerify, authLogin, authLoginVerify, authForgotPassword, authForgotVerify } from '../api/client.jsx'
+import { authSignup, authSignupVerify, authLogin, authForgotPassword, authForgotVerify } from '../api/client.jsx'
 import { Mail, Lock, Eye, EyeOff, Bot, ArrowRight, RefreshCw } from 'lucide-react'
 
 function Input({ icon: Icon, type = 'text', placeholder, value, onChange, rightIcon, onRightClick }) {
@@ -75,8 +75,7 @@ function OTPStep({ email, purpose, onBack }) {
     if (otp.length !== 6) return setError('Enter 6-digit OTP')
     setLoading(true); setError('')
     try {
-      const fn = purpose === 'signup' ? authSignupVerify : authLoginVerify
-      const res = await fn(email, otp)
+      const res = await authSignupVerify(email, otp)
       // is_admin + is_approved bhi save karo
       login(res.token, res.email, res.is_admin || false, res.is_approved || false)
     } catch (e) {
@@ -112,24 +111,22 @@ function OTPStep({ email, purpose, onBack }) {
 }
 
 function LoginForm({ onSwitch }) {
-  const [step, setStep] = useState('form')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPw, setShowPw] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const { login } = useAuth()
 
   const submit = async () => {
     if (!email || !password) return setError('Fill in all fields')
     setLoading(true); setError('')
     try {
-      await authLogin(email, password)
-      setStep('otp')
+      const res = await authLogin(email, password)
+      login(res.token, res.email, res.is_admin || false, res.is_approved || false)
     } catch (e) { setError(e.message) }
     finally { setLoading(false) }
   }
-
-  if (step === 'otp') return <OTPStep email={email} purpose="login" onBack={() => setStep('form')} />
 
   return (
     <div className="space-y-4">

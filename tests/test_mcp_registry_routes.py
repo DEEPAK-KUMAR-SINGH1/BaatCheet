@@ -9,9 +9,9 @@ BACKEND_DIR = Path(__file__).resolve().parents[1] / "backend"
 sys.path.insert(0, str(BACKEND_DIR))
 
 from auth_routes import get_current_user  # noqa: E402
-from MCP import registry  # noqa: E402
-from MCP.routes import router as mcp_router  # noqa: E402
-import MCP.routes as mcp_routes  # noqa: E402
+from Connectors import registry  # noqa: E402
+from Connectors.routes import router as connectors_router  # noqa: E402
+import Connectors.routes as connector_routes  # noqa: E402
 
 
 def _client():
@@ -20,12 +20,12 @@ def _client():
         "email": "user@example.com",
         "is_verified": True,
     }
-    app.include_router(mcp_router)
+    app.include_router(connectors_router)
     return TestClient(app)
 
 
-def test_mcp_registry_contains_frontend_apps():
-    assert list(registry.MCP_APPS) == [
+def test_connector_registry_contains_frontend_apps():
+    assert list(registry.CONNECTOR_APPS) == [
         "gmail",
         "linkedin",
         "google_drive",
@@ -34,7 +34,7 @@ def test_mcp_registry_contains_frontend_apps():
         "notion",
         "trello",
     ]
-    for app in registry.iter_mcp_apps():
+    for app in registry.iter_connector_apps():
         assert app.name
         assert app.capabilities
 
@@ -47,9 +47,9 @@ def test_connections_route_returns_frontend_ready_payload(monkeypatch):
             {"app": "notion", "name": "Notion", "connected": False},
         ]
 
-    monkeypatch.setattr(mcp_routes, "get_mcp_connections", fake_connections)
+    monkeypatch.setattr(connector_routes, "get_connector_connections", fake_connections)
 
-    response = _client().get("/mcp/connections")
+    response = _client().get("/connectors/connections")
 
     assert response.status_code == 200
     data = response.json()
@@ -59,7 +59,7 @@ def test_connections_route_returns_frontend_ready_payload(monkeypatch):
 
 
 def test_each_registered_app_exposes_status(monkeypatch):
-    for app in registry.iter_mcp_apps():
+    for app in registry.iter_connector_apps():
         client_module = app.client()
         monkeypatch.setattr(
             client_module,
@@ -75,14 +75,14 @@ def test_each_registered_app_exposes_status(monkeypatch):
         )
 
     client = _client()
-    for app in registry.iter_mcp_apps():
-        response = client.get(f"/mcp/{app.app}/status")
+    for app in registry.iter_connector_apps():
+        response = client.get(f"/connectors/{app.app}/status")
         assert response.status_code == 200
         assert response.json()["app"] == app.app
 
 
 def test_generic_connect_route_preserves_existing_frontend_url(monkeypatch):
-    app = registry.MCP_APPS["google_drive"]
+    app = registry.CONNECTOR_APPS["google_drive"]
     client_module = app.client()
     monkeypatch.setattr(
         client_module,
@@ -102,7 +102,7 @@ def test_generic_connect_route_preserves_existing_frontend_url(monkeypatch):
         },
     )
 
-    response = _client().post("/mcp/google_drive/connect", json={})
+    response = _client().post("/connectors/google_drive/connect", json={})
 
     assert response.status_code == 200
     data = response.json()
@@ -111,10 +111,10 @@ def test_generic_connect_route_preserves_existing_frontend_url(monkeypatch):
     assert data["connection"]["capabilities"] == list(app.capabilities)
 
 
-def test_mcp_system_message_lists_connected_capabilities(monkeypatch):
+def test_connector_system_message_lists_connected_capabilities(monkeypatch):
     monkeypatch.setattr(
         registry,
-        "get_mcp_connections",
+        "get_connector_connections",
         lambda user_email: [
             {
                 "app": "gmail",
@@ -125,7 +125,7 @@ def test_mcp_system_message_lists_connected_capabilities(monkeypatch):
         ],
     )
 
-    message = registry.get_mcp_system_message("user@example.com")
+    message = registry.get_connector_system_message("user@example.com")
 
     assert "Gmail" in message
     assert "search_messages" in message

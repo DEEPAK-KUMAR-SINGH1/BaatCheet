@@ -4,36 +4,23 @@ from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 
-import pytest
-
-
 BACKEND_DIR = Path(__file__).resolve().parents[1] / "backend"
 sys.path.insert(0, str(BACKEND_DIR))
 
-from MCP.gmail import client  # noqa: E402
+from Connectors.gmail import client  # noqa: E402
 
 
-def test_gmail_credentials_require_matching_redirect_uri(tmp_path, monkeypatch):
-    secrets_file = tmp_path / "credentials.json"
-    secrets_file.write_text(
-        json.dumps(
-            {
-                "web": {
-                    "client_id": "client-id",
-                    "client_secret": "client-secret",
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token",
-                    "redirect_uris": ["http://localhost:9999/wrong"],
-                }
-            }
-        ),
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(client, "CLIENT_SECRETS_FILE", str(secrets_file))
-    monkeypatch.setattr(client, "REDIRECT_URI", "http://localhost:8000/mcp/gmail/callback")
+def test_gmail_oauth_config_comes_from_environment(monkeypatch):
+    monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_ID", "client-id")
+    monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_SECRET", "client-secret")
+    monkeypatch.setattr(client, "REDIRECT_URI", "http://localhost:8000/connectors/gmail/callback")
 
-    with pytest.raises(RuntimeError, match="redirect URI mismatch"):
-        client.ensure_credentials_file()
+    client_type, config = client._load_client_config()
+
+    assert client_type == "web"
+    assert config["client_id"] == "client-id"
+    assert config["client_secret"] == "client-secret"
+    assert config["redirect_uris"] == ["http://localhost:8000/connectors/gmail/callback"]
 
 
 def test_gmail_token_save_preserves_refresh_token_and_expiry(tmp_path, monkeypatch):

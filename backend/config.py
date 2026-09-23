@@ -46,10 +46,13 @@ LANGCHAIN_API_KEY:    str = os.getenv("LANGCHAIN_API_KEY", "")
 LANGCHAIN_PROJECT:    str = os.getenv("LANGCHAIN_PROJECT", "chatbot")
 LANGCHAIN_TRACING_V2: str = os.getenv("LANGCHAIN_TRACING_V2", "false")
 
-# ─── SQLITE ──────────────────────────────
-DATABASE_PATH: str = os.getenv(
-    "DATABASE_PATH",
-    os.path.join(_BASE_DIR, "chatbot.db"),
-)
-if not os.path.isabs(DATABASE_PATH):
-    DATABASE_PATH = os.path.join(_ROOT_DIR, DATABASE_PATH)
+# ─── SUPABASE / POSTGRES ──────────────────
+# Full Postgres connection string for your Supabase project.
+# Dashboard → Project Settings → Database → Connection string (URI).
+# Example: postgresql://postgres.qdjqbkmthmyxztgcleji:[PASSWORD]@aws-0-ap-south-1.pooler.supabase.com:5432/postgres
+DATABASE_URL: str = os.getenv("DATABASE_URL", "")
+if not DATABASE_URL:
+    raise RuntimeError(
+        "DATABASE_URL is not set. Add your Supabase connection string to .env "
+        "(Project Settings \u2192 Database \u2192 Connection string)."
+    )

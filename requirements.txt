@@ -1,7 +1,9 @@
 fastapi
 uvicorn[standard]
 langgraph
-langgraph-checkpoint-sqlite
+langgraph-checkpoint-postgres
+psycopg[binary,pool]
+psycopg2-binary
 langchain
 langchain-core
 langchain-community

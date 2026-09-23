@@ -1,5 +1,5 @@
 """
-database.py - Thread, message, workspace, and sharing helpers using SQLite.
+database.py - Thread, message, workspace, and sharing helpers using Supabase (Postgres).
 """
 
 import glob
@@ -622,7 +622,7 @@ def get_admin_analytics(days: int = 30):
         SELECT date(m.created_at) AS day, COUNT(DISTINCT t.user_id) AS users
         FROM messages m
         JOIN threads t ON t.thread_id = m.thread_id
-        WHERE m.created_at >= datetime('now', '-' || %s || ' days')
+        WHERE m.created_at >= NOW() - (%s || ' days')::interval
         GROUP BY date(m.created_at)
         ORDER BY day DESC
         """,
@@ -634,7 +634,7 @@ def get_admin_analytics(days: int = 30):
         SELECT t.user_id AS email, COUNT(*) AS chats
         FROM messages m
         JOIN threads t ON t.thread_id = m.thread_id
-        WHERE m.role='user' AND m.created_at >= datetime('now', '-' || %s || ' days')
+        WHERE m.role='user' AND m.created_at >= NOW() - (%s || ' days')::interval
         GROUP BY t.user_id
         ORDER BY chats DESC, email ASC
         LIMIT 20
@@ -646,7 +646,7 @@ def get_admin_analytics(days: int = 30):
         """
         SELECT date(uploaded_at) AS day, COUNT(*) AS documents
         FROM documents
-        WHERE uploaded_at >= datetime('now', '-' || %s || ' days')
+        WHERE uploaded_at >= NOW() - (%s || ' days')::interval
         GROUP BY date(uploaded_at)
         ORDER BY day DESC
         """,
@@ -657,7 +657,7 @@ def get_admin_analytics(days: int = 30):
         """
         SELECT email,
                created_at,
-               CAST((julianday('now') - julianday(created_at)) * 24 AS INTEGER) AS age_hours
+               CAST(EXTRACT(EPOCH FROM (NOW() - created_at)) / 3600 AS INTEGER) AS age_hours
         FROM users
         WHERE is_admin=0 AND is_approved=0
         ORDER BY created_at ASC
@@ -670,7 +670,7 @@ def get_admin_analytics(days: int = 30):
         SELECT COALESCE(reason, 'unknown') AS reason, COUNT(*) AS count
         FROM analytics_events
         WHERE event_type='failure'
-          AND created_at >= datetime('now', '-' || %s || ' days')
+          AND created_at >= NOW() - (%s || ' days')::interval
         GROUP BY COALESCE(reason, 'unknown')
         ORDER BY count DESC, reason ASC
         LIMIT 10

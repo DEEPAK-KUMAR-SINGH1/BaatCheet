@@ -1,5 +1,5 @@
 """
-engine.py - LangGraph chatbot using a local SQLite checkpointer.
+engine.py - LangGraph chatbot using a Supabase (Postgres) checkpointer.
 """
 
 from langgraph.graph import StateGraph, START, END
@@ -15,7 +15,6 @@ import ast
 import logging
 import operator
 import os
-import sqlite3
 
 from Connectors import (
     get_all_connector_tools,
@@ -23,7 +22,7 @@ from Connectors import (
     reset_current_user_email,
     set_current_user_email,
 )
-from config import DATABASE_PATH, load_env
+from config import DATABASE_URL, load_env
 load_env()
 
 logging.basicConfig(level=logging.WARNING)
@@ -188,43 +187,46 @@ def should_use_tool(state: ChatState):
     return END
 
 # ─────────────────────────────────────────
-# GRAPH + CHECKPOINTER (SQLite)
+# GRAPH + CHECKPOINTER (Supabase / Postgres)
 # ─────────────────────────────────────────
 
 _checkpointer = None
-_checkpoint_conn = None
+_checkpointer_cm = None
 chatbot       = None
 
 
 def init_chatbot():
-    """Lazily initialize the chatbot with a SQLite checkpointer."""
-    global _checkpointer, _checkpoint_conn, chatbot
+    """Lazily initialize the chatbot with a Postgres (Supabase) checkpointer."""
+    global _checkpointer, _checkpointer_cm, chatbot
 
     if chatbot is not None:
         return chatbot
 
     try:
-        from langgraph.checkpoint.sqlite import SqliteSaver
-        _checkpoint_conn = sqlite3.connect(DATABASE_PATH, check_same_thread=False)
-        _checkpointer = SqliteSaver(_checkpoint_conn)
+        from langgraph.checkpoint.postgres import PostgresSaver
+        _checkpointer_cm = PostgresSaver.from_conn_string(DATABASE_URL)
+        _checkpointer = _checkpointer_cm.__enter__()
         _checkpointer.setup()
-        logger.info("LangGraph SQLite checkpointer initialized")
+        logger.info("LangGraph Postgres (Supabase) checkpointer initialized")
     except Exception as e:
-        logger.error(f"SQLite checkpointer init failed: {e}")
-        raise RuntimeError(f"Could not initialize SQLite for LangGraph: {e}")
+        logger.error(f"Postgres checkpointer init failed: {e}")
+        raise RuntimeError(f"Could not initialize Supabase Postgres for LangGraph: {e}")
 
     chatbot = _build_graph(_checkpointer)
-    logger.info("Chatbot graph compiled with SQLite checkpointer")
+    logger.info("Chatbot graph compiled with Postgres checkpointer")
     return chatbot
 
 
 def cleanup_chatbot():
-    global _checkpointer, _checkpoint_conn, chatbot
+    global _checkpointer, _checkpointer_cm, chatbot
     logger.info("Cleaning up chatbot resources...")
     _checkpointer = None
-    if _checkpoint_conn is not None:
-        _checkpoint_conn.close()
-    _checkpoint_conn = None
+    if _checkpointer_cm is not None:
+        try:
+            _checkpointer_cm.__exit__(None, None, None)
+        except Exception:
+            pass
+    _checkpointer_cm = None
     chatbot       = None
 
 
